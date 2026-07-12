@@ -4,6 +4,8 @@ import AppShell from "./components/AppShell";
 import DevRoleSwitcher from "./components/DevRoleSwitcher";
 import Toast from "./components/Toast";
 import CommunityPage from "./pages/CommunityPage";
+import AccountManagementPage from "./pages/AccountManagementPage";
+import { DEMO_USERS } from "./data/demoUsers";
 
 import HomePage from "./pages/HomePage";
 import IssueDetailPage from "./pages/IssueDetailPage";
@@ -20,9 +22,12 @@ import {
   canManageUpkeep,
   canPostAnnouncements,
   canViewCommunity,
+  isOwnerAdmin,
+  isVillaAdmin,
   USER_ROLES,
 } from "./constants/roles";
 import { THEME } from "./constants/theme";
+import { canManageUser } from "./utils/userAccess";
 import { calculateNextDue } from "./utils/upkeep";
 
 import {
@@ -86,6 +91,13 @@ function App() {
 
   const [allUpkeepHistory, setAllUpkeepHistory] =
     useState([]);
+
+  // Account metadata is local for now; authentication remains a later Supabase step.
+  const [allUsers, setAllUsers] =
+    useState(DEMO_USERS);
+
+  const [moreView, setMoreView] =
+    useState("community");
 
   const [selectedIssueId, setSelectedIssueId] =
     useState(null);
@@ -168,6 +180,7 @@ function App() {
     );
     setActiveTab(getDefaultTab(nextProfile));
     setSelectedIssueId(null);
+    setMoreView("community");
 
     setToast(
       `Demo switched to ${nextProfile.label}.`,
@@ -178,13 +191,17 @@ function App() {
     // An issue detail from one area must not remain open in another context.
     setActiveAreaCode(areaCode);
     setSelectedIssueId(null);
+    setMoreView("community");
   };
 
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
-
-    // Bottom navigation always returns to the selected tab's root page.
     setSelectedIssueId(null);
+
+    // More always opens at its family/community landing page.
+    if (tabId === "more") {
+      setMoreView("community");
+    }
   };
 
   const handleIssueSubmit = async (formData) => {
@@ -428,6 +445,162 @@ function App() {
     setToast(`${task.title} marked complete.`);
   };
 
+  const handleUserCreate = async (formData) => {
+      const villaAdminCreatingResident =
+        isVillaAdmin(profile) &&
+        formData.role === USER_ROLES.RESIDENT &&
+        formData.homeAreaCode === profile.homeAreaCode;
+
+      const ownerCreatingManagedAccount =
+        isOwnerAdmin(profile) &&
+        [
+          USER_ROLES.VILLA_ADMIN,
+          USER_ROLES.UPKEEP_MANAGER,
+        ].includes(formData.role);
+
+      if (
+        !villaAdminCreatingResident &&
+        !ownerCreatingManagedAccount
+      ) {
+        setToast(
+          "You do not have permission to create this account.",
+        );
+
+        return false;
+      }
+
+      if (
+        formData.role === USER_ROLES.VILLA_ADMIN &&
+        !getAreaByCode(formData.homeAreaCode)
+      ) {
+        setToast("Choose a valid villa.");
+        return false;
+      }
+
+      const duplicateIdentity = allUsers.some(
+        (user) =>
+          (formData.phone &&
+            user.phone === formData.phone) ||
+          (formData.employeeId &&
+            user.employeeId === formData.employeeId),
+      );
+
+      if (duplicateIdentity) {
+        setToast(
+          "An account with this phone or employee ID already exists.",
+        );
+
+        return false;
+      }
+
+      const newUser = {
+        id: createId(),
+        fullName: formData.fullName,
+        phone: formData.phone,
+        employeeId: formData.employeeId,
+        role: formData.role,
+        homeAreaCode: formData.homeAreaCode,
+        mustChangePassword: true,
+        isActive: true,
+      };
+
+      // The temporary password is intentionally not stored in frontend account state.
+      setAllUsers((currentUsers) => [
+        newUser,
+        ...currentUsers,
+      ]);
+
+      setToast(
+        `${newUser.fullName}'s account was created.`,
+      );
+
+      return true;
+    };
+
+    const handleUserPasswordReset = async (
+      userId,
+      temporaryPassword,
+    ) => {
+      const targetUser = allUsers.find(
+        (user) => user.id === userId,
+      );
+
+      if (
+        !targetUser ||
+        !canManageUser(profile, targetUser)
+      ) {
+        setToast(
+          "You do not have permission to reset this account.",
+        );
+
+        return false;
+      }
+
+      if (temporaryPassword.length < 6) {
+        setToast(
+          "Temporary password must have at least 6 characters.",
+        );
+
+        return false;
+      }
+
+      // The real implementation will send this password to a protected Edge Function.
+      setAllUsers((currentUsers) =>
+        currentUsers.map((user) =>
+          user.id === userId
+            ? {
+              ...user,
+              mustChangePassword: true,
+            }
+            : user,
+        ),
+      );
+
+      setToast(
+        `Temporary password reset for ${targetUser.fullName}.`,
+      );
+
+      return true;
+    };
+
+    const handleUserActiveChange = async (
+      userId,
+      isActive,
+    ) => {
+      const targetUser = allUsers.find(
+        (user) => user.id === userId,
+      );
+
+      if (
+        !targetUser ||
+        !canManageUser(profile, targetUser)
+      ) {
+        setToast(
+          "You do not have permission to change this account.",
+        );
+
+        return false;
+      }
+
+      setAllUsers((currentUsers) =>
+        currentUsers.map((user) =>
+          user.id === userId
+            ? {
+              ...user,
+              isActive,
+            }
+            : user,
+        ),
+      );
+
+      setToast(
+        `${targetUser.fullName} ${isActive ? "reactivated" : "deactivated"
+        }.`,
+      );
+
+      return true;
+    };
+
   const renderPage = () => {
     if (activeTab === "home") {
       return (
@@ -500,6 +673,25 @@ function App() {
       activeTab === "more" &&
       canViewCommunity(profile)
     ) {
+      if (moreView === "accounts") {
+        return (
+          <AccountManagementPage
+            profile={profile}
+            users={allUsers}
+            onBack={() =>
+              setMoreView("community")
+            }
+            onCreateUser={handleUserCreate}
+            onResetPassword={
+              handleUserPasswordReset
+            }
+            onSetUserActive={
+              handleUserActiveChange
+            }
+          />
+        );
+      }
+
       return (
         <CommunityPage
           // Changing areas resets unfinished announcement form state.
@@ -508,9 +700,14 @@ function App() {
           activeArea={activeArea}
           announcements={announcements}
           onPostAnnouncement={handleAnnouncementPost}
+          onOpenAccountManagement={() =>
+            setMoreView("accounts")
+          }
         />
       );
     }
+
+    
 
     return (
       <PagePlaceholder

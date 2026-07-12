@@ -3,7 +3,11 @@ import { useState } from "react";
 import Btn from "../components/Btn";
 import Field from "../components/Field";
 import { ALL_AREAS_CODE } from "../constants/areas";
-import { canPostAnnouncements } from "../constants/roles";
+import {
+  canManageResidents,
+  canPostAnnouncements,
+  isOwnerAdmin,
+} from "../constants/roles";
 import { THEME } from "../constants/theme";
 import { formatDateTime } from "../utils/date";
 
@@ -23,6 +27,7 @@ function CommunityPage({
   activeArea,
   announcements,
   onPostAnnouncement,
+  onOpenAccountManagement,
 }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -34,6 +39,10 @@ function CommunityPage({
   const canPublish =
     canPostAnnouncements(profile) &&
     !isAllAreas;
+
+  const canOpenAccountManagement =
+    canManageResidents(profile) ||
+    isOwnerAdmin(profile);
 
   const canSubmit =
     Boolean(title.trim()) &&
@@ -50,7 +59,7 @@ function CommunityPage({
     setPublishing(true);
 
     try {
-      // The selected area determines exactly who can later read this announcement.
+      // Announcements always belong to the currently selected real area.
       await onPostAnnouncement({
         title: title.trim(),
         body: body.trim(),
@@ -88,6 +97,63 @@ function CommunityPage({
           ? "Select an area to view its announcements."
           : `Announcements for ${activeArea?.name}`}
       </p>
+
+      {canOpenAccountManagement && (
+        <button
+          type="button"
+          onClick={onOpenAccountManagement}
+          style={{
+            display: "flex",
+            width: "100%",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            marginBottom: 18,
+            padding: 16,
+            border: `1px solid ${THEME.line}`,
+            borderRadius: 16,
+            background: THEME.card,
+            color: THEME.ink,
+            cursor: "pointer",
+            textAlign: "left",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: 15,
+                fontWeight: 600,
+              }}
+            >
+              {isOwnerAdmin(profile)
+                ? "Account management"
+                : `Manage Villa ${profile.homeAreaCode} residents`}
+            </div>
+
+            <div
+              style={{
+                marginTop: 3,
+                color: THEME.mute,
+                fontSize: 12.5,
+                lineHeight: 1.4,
+              }}
+            >
+              {isOwnerAdmin(profile)
+                ? "Manage villa admins and the upkeep manager."
+                : "Add residents, reset passwords and manage access."}
+            </div>
+          </div>
+
+          <span
+            style={{
+              color: THEME.brass,
+              fontSize: 20,
+            }}
+          >
+            →
+          </span>
+        </button>
+      )}
 
       {canPublish && (
         <form
