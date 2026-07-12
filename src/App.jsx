@@ -23,10 +23,10 @@ import { createId } from "./utils/id";
 
 // This local profile will be replaced by the authenticated Supabase profile.
 const DEMO_PROFILE = {
-  id: "demo-upkeep-manager",
-  fullName: "Iron Man",
-  role: USER_ROLES.VILLA__ADMIN,
-  homeAreaCode: "S2",
+  id: "demo-s1-admin",
+  fullName: "Tony Stark",
+  role: USER_ROLES.VILLA_ADMIN,
+  homeAreaCode: "S1",
 };
 
 const TAB_TITLES = {
@@ -112,18 +112,6 @@ function App() {
   };
 
   const handleTabChange = (tabId) => {
-    // New issues must always belong to a real villa or the clubhouse.
-    if (
-      tabId === "report" &&
-      activeAreaCode === ALL_AREAS_CODE
-    ) {
-      setToast(
-        "Select a specific area before reporting an issue.",
-      );
-
-      return;
-    }
-
     setActiveTab(tabId);
 
     // Pressing a bottom-navigation item returns to its main page.
@@ -131,11 +119,22 @@ function App() {
   };
 
   const handleIssueSubmit = async (formData) => {
+    // ALL is a virtual viewing context and must never be stored on an issue.
+    const reportArea = getAreaByCode(formData.areaCode);
+
+    if (
+      !reportArea ||
+      formData.areaCode === ALL_AREAS_CODE
+    ) {
+      setToast("Choose a valid area for this issue.");
+      return;
+    }
+
     const timestamp = new Date().toISOString();
 
     const newIssue = {
       id: createId(),
-      areaCode: activeAreaCode,
+      areaCode: formData.areaCode,
       category: formData.category,
       location: formData.location,
       description: formData.description,
@@ -163,8 +162,7 @@ function App() {
     handleTabChange("issues");
 
     setToast(
-      `Issue submitted for ${activeArea?.name ?? "the selected area"
-      }.`,
+      `Issue submitted for ${reportArea.name}.`,
     );
   };
 
@@ -197,11 +195,14 @@ function App() {
     if (activeTab === "report") {
       return (
         <ReportIssuePage
-          // Reset unfinished form state when the selected area changes.
+          // A fresh form is created each time the reporting context changes.
           key={activeAreaCode}
+          profile={DEMO_PROFILE}
           activeArea={activeArea}
           onSubmit={handleIssueSubmit}
-          onCancel={() => handleTabChange("home")}
+          onCancel={() =>
+            handleTabChange(getDefaultTab(DEMO_PROFILE))
+          }
         />
       );
     }

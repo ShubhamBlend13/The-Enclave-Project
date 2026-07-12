@@ -10,6 +10,10 @@ function AppShell({
   onTabChange,
   children,
 }) {
+  // A report owns its area selection once the form opens.
+  // Hiding the global switcher prevents the form context changing midway.
+  const showAreaSwitcher = activeTab !== "report";
+
   return (
     <div
       style={{
@@ -20,18 +24,20 @@ function AppShell({
         background: THEME.bg,
       }}
     >
-      <header
-        style={{
-          padding: "12px 20px 4px",
-        }}
-      >
-        {/* Area selection lives above every page so context survives navigation. */}
-        <AreaSwitcher
-          profile={profile}
-          activeAreaCode={activeAreaCode}
-          onAreaChange={onAreaChange}
-        />
-      </header>
+      {showAreaSwitcher && (
+        <header
+          style={{
+            padding: "12px 20px 4px",
+          }}
+        >
+          {/* Area context is shared by the main application pages. */}
+          <AreaSwitcher
+            profile={profile}
+            activeAreaCode={activeAreaCode}
+            onAreaChange={onAreaChange}
+          />
+        </header>
+      )}
 
       <main
         style={{
@@ -42,6 +48,7 @@ function AppShell({
       </main>
 
       <BottomNav
+        profile={profile}
         activeTab={activeTab}
         onTabChange={onTabChange}
       />

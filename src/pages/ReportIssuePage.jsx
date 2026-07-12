@@ -3,9 +3,17 @@ import { useState } from "react";
 import Btn from "../components/Btn";
 import Field from "../components/Field";
 import {
+  ALL_AREAS_CODE,
+  AREAS,
+} from "../constants/areas";
+import {
   ISSUE_CATEGORIES,
   ISSUE_PRIORITIES,
 } from "../constants/issues";
+import {
+  isOwnerAdmin,
+  isUpkeepManager,
+} from "../constants/roles";
 import { THEME } from "../constants/theme";
 
 const INPUT_STYLE = {
@@ -20,17 +28,38 @@ const INPUT_STYLE = {
 };
 
 function ReportIssuePage({
+  profile,
   activeArea,
   onSubmit,
   onCancel,
 }) {
+  // Operational users can report an issue in any real property area.
+  const canChooseArea =
+    isOwnerAdmin(profile) ||
+    isUpkeepManager(profile);
+
+  // ALL is only a viewing context, so it never becomes a report area.
+  const initialAreaCode =
+    activeArea?.code &&
+    activeArea.code !== ALL_AREAS_CODE
+      ? activeArea.code
+      : "";
+
+  const [reportAreaCode, setReportAreaCode] =
+    useState(initialAreaCode);
+
   const [category, setCategory] = useState("");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("Normal");
   const [submitting, setSubmitting] = useState(false);
 
+  const reportArea = AREAS.find(
+    (area) => area.code === reportAreaCode,
+  );
+
   const canSubmit =
+    Boolean(reportAreaCode) &&
     Boolean(category) &&
     Boolean(description.trim()) &&
     !submitting;
@@ -45,8 +74,10 @@ function ReportIssuePage({
     setSubmitting(true);
 
     try {
-      // Area is supplied by the application context, not selected freely by the user.
+      // The selected real area travels with the form data.
+      // App-level state can change later without changing this report.
       await onSubmit({
+        areaCode: reportAreaCode,
         category,
         location: location.trim(),
         description: description.trim(),
@@ -79,41 +110,67 @@ function ReportIssuePage({
           lineHeight: 1.5,
         }}
       >
-        The upkeep manager will see the issue after it is submitted.
+        The upkeep manager will see the issue after it is
+        submitted.
       </p>
 
-      <div
-        style={{
-          marginBottom: 20,
-          padding: "12px 14px",
-          border: `1px solid ${THEME.line}`,
-          borderRadius: 12,
-          background: THEME.greenSoft,
-        }}
-      >
-        <div
-          style={{
-            color: THEME.mute,
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: 1,
-            textTransform: "uppercase",
-          }}
-        >
-          Reporting for
-        </div>
+      {canChooseArea ? (
+        <Field label="Report issue for">
+          <select
+            value={reportAreaCode}
+            onChange={(event) =>
+              setReportAreaCode(event.target.value)
+            }
+            style={INPUT_STYLE}
+          >
+            <option value="">
+              Select an area
+            </option>
 
+            {AREAS.map((area) => (
+              <option
+                key={area.code}
+                value={area.code}
+              >
+                {area.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : (
         <div
           style={{
-            marginTop: 3,
-            color: THEME.green,
-            fontSize: 15,
-            fontWeight: 700,
+            marginBottom: 20,
+            padding: "12px 14px",
+            border: `1px solid ${THEME.line}`,
+            borderRadius: 12,
+            background: THEME.greenSoft,
           }}
         >
-          {activeArea?.name}
+          <div
+            style={{
+              color: THEME.mute,
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 1,
+              textTransform: "uppercase",
+            }}
+          >
+            Reporting for
+          </div>
+
+          <div
+            style={{
+              marginTop: 3,
+              color: THEME.green,
+              fontSize: 15,
+              fontWeight: 700,
+            }}
+          >
+            {reportArea?.name}
+          </div>
         </div>
-      </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         <Field label="What kind of issue?">
@@ -183,7 +240,7 @@ function ReportIssuePage({
               setLocation(event.target.value)
             }
             placeholder={
-              activeArea?.code === "CLUBHOUSE"
+              reportAreaCode === "CLUBHOUSE"
                 ? "e.g. Swimming pool, gym, entrance"
                 : "e.g. Master bedroom, terrace, kitchen"
             }

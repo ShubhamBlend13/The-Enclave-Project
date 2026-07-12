@@ -1,34 +1,14 @@
+import { getNavigationItems } from "../constants/navigation";
 import { THEME } from "../constants/theme";
 
-const NAV_ITEMS = [
-  {
-    id: "home",
-    icon: "⌂",
-    label: "Home",
-  },
-  {
-    id: "report",
-    icon: "＋",
-    label: "Report",
-  },
-  {
-    id: "issues",
-    icon: "☰",
-    label: "Issues",
-  },
-  {
-    id: "upkeep",
-    icon: "✓",
-    label: "Upkeep",
-  },
-  {
-    id: "more",
-    icon: "◎",
-    label: "More",
-  },
-];
+function BottomNav({
+  profile,
+  activeTab,
+  onTabChange,
+}) {
+  // The visible tabs depend on the authenticated user's role.
+  const navigationItems = getNavigationItems(profile);
 
-function BottomNav({ activeTab, onTabChange }) {
   return (
     <nav
       aria-label="Main navigation"
@@ -36,18 +16,19 @@ function BottomNav({ activeTab, onTabChange }) {
         position: "fixed",
         bottom: 0,
         left: "50%",
-        transform: "translateX(-50%)",
         zIndex: 20,
         display: "flex",
         width: "100%",
         maxWidth: 480,
-        padding: "10px 8px calc(12px + env(safe-area-inset-bottom))",
+        padding:
+          "10px 8px calc(12px + env(safe-area-inset-bottom))",
         borderTop: `1px solid ${THEME.line}`,
         background: "#FFFFFFF2",
         backdropFilter: "blur(10px)",
+        transform: "translateX(-50%)",
       }}
     >
-      {NAV_ITEMS.map((item) => {
+      {navigationItems.map((item) => {
         const isActive = activeTab === item.id;
 
         return (
@@ -60,7 +41,9 @@ function BottomNav({ activeTab, onTabChange }) {
               padding: "4px 0",
               border: "none",
               background: "transparent",
-              color: isActive ? THEME.green : THEME.mute,
+              color: isActive
+                ? THEME.green
+                : THEME.mute,
               cursor: "pointer",
             }}
           >
