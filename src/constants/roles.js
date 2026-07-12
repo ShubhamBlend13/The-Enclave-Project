@@ -45,3 +45,8 @@ export function canManageUpkeep(profile) {
     isUpkeepManager(profile)
   );
 }
+
+export function canViewCommunity(profile) {
+  // Community content is family-facing and hidden from operational employees.
+  return !isUpkeepManager(profile);
+}

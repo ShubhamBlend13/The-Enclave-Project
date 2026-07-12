@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import AppShell from "./components/AppShell";
 import DevRoleSwitcher from "./components/DevRoleSwitcher";
 import Toast from "./components/Toast";
+import CommunityPage from "./pages/CommunityPage";
 
 import HomePage from "./pages/HomePage";
 import IssueDetailPage from "./pages/IssueDetailPage";
@@ -14,7 +15,11 @@ import {
   getAreaByCode,
 } from "./constants/areas";
 import { ISSUE_STATUSES } from "./constants/issues";
-import { USER_ROLES } from "./constants/roles";
+import {
+  canPostAnnouncements,
+  canViewCommunity,
+  USER_ROLES,
+} from "./constants/roles";
 import { THEME } from "./constants/theme";
 
 import {
@@ -29,7 +34,6 @@ import { createId } from "./utils/id";
 
 const TAB_TITLES = {
   upkeep: "Upkeep",
-  more: "Community",
 };
 
 function getDefaultTab(profile) {
@@ -69,6 +73,10 @@ function App() {
   const [allIssues, setAllIssues] =
     useState(DEMO_ISSUES);
 
+  // Announcements are local state until Supabase becomes the shared data source.
+  const [allAnnouncements, setAllAnnouncements] =
+    useState(DEMO_ANNOUNCEMENTS);
+
   const [selectedIssueId, setSelectedIssueId] =
     useState(null);
 
@@ -81,26 +89,32 @@ function App() {
     activeAreaCode === ALL_AREAS_CODE
       ? allIssues
       : allIssues.filter(
-          (issue) =>
-            issue.areaCode === activeAreaCode,
-        );
+        (issue) =>
+          issue.areaCode === activeAreaCode,
+      );
 
   // Announcements always belong to one real area.
   const announcements =
     activeAreaCode === ALL_AREAS_CODE
       ? []
-      : DEMO_ANNOUNCEMENTS.filter(
+      : allAnnouncements
+        .filter(
           (announcement) =>
             announcement.areaCode === activeAreaCode,
+        )
+        .sort(
+          (first, second) =>
+            new Date(second.createdAt).getTime() -
+            new Date(first.createdAt).getTime(),
         );
 
   const upkeepTasks =
     activeAreaCode === ALL_AREAS_CODE
       ? DEMO_UPKEEP_TASKS
       : DEMO_UPKEEP_TASKS.filter(
-          (task) =>
-            task.areaCode === activeAreaCode,
-        );
+        (task) =>
+          task.areaCode === activeAreaCode,
+      );
 
   const selectedIssue = issues.find(
     (issue) => issue.id === selectedIssueId,
@@ -221,6 +235,51 @@ function App() {
     setToast("Issue updated.");
   };
 
+  const handleAnnouncementPost = async (formData) => {
+    // Only villa admins may create announcements.
+    if (!canPostAnnouncements(profile)) {
+      setToast(
+        "You do not have permission to post announcements.",
+      );
+
+      return;
+    }
+
+    const announcementArea = getAreaByCode(
+      activeAreaCode,
+    );
+
+    // Announcements must belong to a real villa or the clubhouse.
+    if (
+      !announcementArea ||
+      activeAreaCode === ALL_AREAS_CODE
+    ) {
+      setToast(
+        "Select a specific area before posting an announcement.",
+      );
+
+      return;
+    }
+
+    const newAnnouncement = {
+      id: createId(),
+      areaCode: activeAreaCode,
+      title: formData.title,
+      body: formData.body,
+      createdBy: profile.fullName,
+      createdAt: new Date().toISOString(),
+    };
+
+    setAllAnnouncements((currentAnnouncements) => [
+      newAnnouncement,
+      ...currentAnnouncements,
+    ]);
+
+    setToast(
+      `Announcement published to ${announcementArea.name}.`,
+    );
+  };
+
   const renderPage = () => {
     if (activeTab === "home") {
       return (
@@ -272,6 +331,22 @@ function App() {
           activeArea={activeArea}
           issues={issues}
           onOpenIssue={setSelectedIssueId}
+        />
+      );
+    }
+
+    if (
+      activeTab === "more" &&
+      canViewCommunity(profile)
+    ) {
+      return (
+        <CommunityPage
+          // Changing areas resets unfinished announcement form state.
+          key={activeAreaCode}
+          profile={profile}
+          activeArea={activeArea}
+          announcements={announcements}
+          onPostAnnouncement={handleAnnouncementPost}
         />
       );
     }
