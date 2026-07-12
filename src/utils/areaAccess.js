@@ -1,7 +1,11 @@
-import { AREAS, CLUBHOUSE_CODE } from "../constants/areas";
+import {
+  ALL_AREAS_CODE,
+  AREAS,
+  CLUBHOUSE_CODE,
+} from "../constants/areas";
 import { USER_ROLES } from "../constants/roles";
 
-// Owner and upkeep users work across the full property.
+// Operational roles can work across the whole property.
 const ALL_AREA_ROLES = new Set([
   USER_ROLES.OWNER_ADMIN,
   USER_ROLES.UPKEEP_MANAGER,
@@ -16,7 +20,7 @@ export function getAccessibleAreas(profile) {
     return AREAS;
   }
 
-  // Villa users can switch only between their home villa and the clubhouse.
+  // Villa users only access their own home and the shared clubhouse.
   return AREAS.filter(
     (area) =>
       area.code === profile.homeAreaCode ||
@@ -25,12 +29,24 @@ export function getAccessibleAreas(profile) {
 }
 
 export function getDefaultAreaCode(profile) {
+  if (!profile) {
+    return null;
+  }
+
+  // Upkeep and owner users start with a combined operational view.
+  if (ALL_AREA_ROLES.has(profile.role)) {
+    return ALL_AREAS_CODE;
+  }
+
   const accessibleAreas = getAccessibleAreas(profile);
 
-  // Villa users should land in their own home context after login.
   const homeArea = accessibleAreas.find(
-    (area) => area.code === profile?.homeAreaCode,
+    (area) => area.code === profile.homeAreaCode,
   );
 
   return homeArea?.code ?? accessibleAreas[0]?.code ?? null;
+}
+
+export function canViewAllAreas(profile) {
+  return ALL_AREA_ROLES.has(profile?.role);
 }

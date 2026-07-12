@@ -1,7 +1,13 @@
-import { CLUBHOUSE_CODE } from "../constants/areas";
+import {
+  ALL_AREAS_CODE,
+  CLUBHOUSE_CODE,
+} from "../constants/areas";
 import { THEME } from "../constants/theme";
 import { USER_ROLES } from "../constants/roles";
-import { getAccessibleAreas } from "../utils/areaAccess";
+import {
+  canViewAllAreas,
+  getAccessibleAreas,
+} from "../utils/areaAccess";
 
 const AREA_PICKER_ROLES = new Set([
   USER_ROLES.OWNER_ADMIN,
@@ -20,7 +26,7 @@ function AreaSwitcher({
     return null;
   }
 
-  // Operational roles have nine areas, so a dropdown is cleaner than nine tabs.
+  // Operational users work across many areas, so a dropdown is easier on mobile.
   if (useAreaPicker) {
     return (
       <div
@@ -46,7 +52,9 @@ function AreaSwitcher({
         <select
           id="active-area"
           value={activeAreaCode ?? ""}
-          onChange={(event) => onAreaChange(event.target.value)}
+          onChange={(event) =>
+            onAreaChange(event.target.value)
+          }
           style={{
             width: "100%",
             padding: "12px 14px",
@@ -58,8 +66,17 @@ function AreaSwitcher({
             fontWeight: 600,
           }}
         >
+          {canViewAllAreas(profile) && (
+            <option value={ALL_AREAS_CODE}>
+              All areas
+            </option>
+          )}
+
           {accessibleAreas.map((area) => (
-            <option key={area.code} value={area.code}>
+            <option
+              key={area.code}
+              value={area.code}
+            >
               {area.name}
             </option>
           ))}
@@ -83,7 +100,7 @@ function AreaSwitcher({
       {accessibleAreas.map((area) => {
         const isActive = area.code === activeAreaCode;
 
-        // The villa label is personal to the user; the second context is always common.
+        // Villa users switch between their own home and the shared clubhouse.
         const label =
           area.code === CLUBHOUSE_CODE
             ? "Clubhouse"
@@ -98,8 +115,12 @@ function AreaSwitcher({
               padding: "11px 10px",
               border: "none",
               borderRadius: 10,
-              background: isActive ? THEME.card : "transparent",
-              color: isActive ? THEME.green : THEME.mute,
+              background: isActive
+                ? THEME.card
+                : "transparent",
+              color: isActive
+                ? THEME.green
+                : THEME.mute,
               fontSize: 14,
               fontWeight: 700,
               cursor: "pointer",

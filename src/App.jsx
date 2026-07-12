@@ -3,11 +3,14 @@ import { useEffect, useState } from "react";
 import AppShell from "./components/AppShell";
 import Toast from "./components/Toast";
 import HomePage from "./pages/HomePage";
+import IssueDetailPage from "./pages/IssueDetailPage";
+import IssuesPage from "./pages/IssuesPage";
 import ReportIssuePage from "./pages/ReportIssuePage";
-import { getAreaByCode } from "./constants/areas";
 import {
-  ISSUE_STATUSES,
-} from "./constants/issues";
+  ALL_AREAS_CODE,
+  getAreaByCode,
+} from "./constants/areas";
+import { ISSUE_STATUSES } from "./constants/issues";
 import { USER_ROLES } from "./constants/roles";
 import { THEME } from "./constants/theme";
 import {
@@ -20,41 +23,72 @@ import { createId } from "./utils/id";
 
 // This local profile will be replaced by the authenticated Supabase profile.
 const DEMO_PROFILE = {
-  id: "demo-s1-admin",
-  fullName: "Sunil Tenali",
-  role: USER_ROLES.VILLA_ADMIN,
-  homeAreaCode: "S1",
+  id: "demo-upkeep-manager",
+  fullName: "Iron Man",
+  role: USER_ROLES.VILLA__ADMIN,
+  homeAreaCode: "S2",
 };
 
 const TAB_TITLES = {
-  issues: "Issues",
   upkeep: "Upkeep",
   more: "Community",
 };
 
+function getDefaultTab(profile) {
+  // Operational users should land directly on the work queue.
+  if (profile.role === USER_ROLES.UPKEEP_MANAGER) {
+    return "issues";
+  }
+
+  // Residents and villa admins start with their area dashboard.
+  return "home";
+}
+
 function App() {
-  const [activeTab, setActiveTab] = useState("home");
+  const [activeTab, setActiveTab] = useState(() =>
+    getDefaultTab(DEMO_PROFILE),
+  );
+
   const [activeAreaCode, setActiveAreaCode] = useState(() =>
     getDefaultAreaCode(DEMO_PROFILE),
   );
 
-  // Issues are local state for now so newly submitted records appear immediately.
+  // Local issue state lets us test create and update workflows before Supabase.
   const [allIssues, setAllIssues] = useState(DEMO_ISSUES);
+
+  const [selectedIssueId, setSelectedIssueId] =
+    useState(null);
+
   const [toast, setToast] = useState("");
 
   const activeArea = getAreaByCode(activeAreaCode);
 
-  const issues = allIssues.filter(
-    (issue) => issue.areaCode === activeAreaCode,
-  );
+  // All Areas removes the area constraint for operational work queues.
+  const issues =
+    activeAreaCode === ALL_AREAS_CODE
+      ? allIssues
+      : allIssues.filter(
+        (issue) => issue.areaCode === activeAreaCode,
+      );
 
-  const announcements = DEMO_ANNOUNCEMENTS.filter(
-    (announcement) =>
-      announcement.areaCode === activeAreaCode,
-  );
+  // Announcements still belong to one real area.
+  const announcements =
+    activeAreaCode === ALL_AREAS_CODE
+      ? []
+      : DEMO_ANNOUNCEMENTS.filter(
+        (announcement) =>
+          announcement.areaCode === activeAreaCode,
+      );
 
-  const upkeepTasks = DEMO_UPKEEP_TASKS.filter(
-    (task) => task.areaCode === activeAreaCode,
+  const upkeepTasks =
+    activeAreaCode === ALL_AREAS_CODE
+      ? DEMO_UPKEEP_TASKS
+      : DEMO_UPKEEP_TASKS.filter(
+        (task) => task.areaCode === activeAreaCode,
+      );
+
+  const selectedIssue = issues.find(
+    (issue) => issue.id === selectedIssueId,
   );
 
   useEffect(() => {
@@ -62,7 +96,6 @@ function App() {
       return undefined;
     }
 
-    // The confirmation disappears automatically after a short delay.
     const timerId = window.setTimeout(() => {
       setToast("");
     }, 2600);
@@ -72,7 +105,34 @@ function App() {
     };
   }, [toast]);
 
+  const handleAreaChange = (areaCode) => {
+    // An issue from one area must not remain open after switching context.
+    setActiveAreaCode(areaCode);
+    setSelectedIssueId(null);
+  };
+
+  const handleTabChange = (tabId) => {
+    // New issues must always belong to a real villa or the clubhouse.
+    if (
+      tabId === "report" &&
+      activeAreaCode === ALL_AREAS_CODE
+    ) {
+      setToast(
+        "Select a specific area before reporting an issue.",
+      );
+
+      return;
+    }
+
+    setActiveTab(tabId);
+
+    // Pressing a bottom-navigation item returns to its main page.
+    setSelectedIssueId(null);
+  };
+
   const handleIssueSubmit = async (formData) => {
+    const timestamp = new Date().toISOString();
+
     const newIssue = {
       id: createId(),
       areaCode: activeAreaCode,
@@ -82,13 +142,15 @@ function App() {
       priority: formData.priority,
       status: ISSUE_STATUSES.OPEN,
       reportedBy: DEMO_PROFILE.fullName,
-      createdAt: new Date().toISOString(),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      resolvedAt: null,
       updates: [
         {
           id: createId(),
           message: "Issue reported",
           createdBy: DEMO_PROFILE.fullName,
-          createdAt: new Date().toISOString(),
+          createdAt: timestamp,
         },
       ],
     };
@@ -98,10 +160,24 @@ function App() {
       ...currentIssues,
     ]);
 
-    setActiveTab("home");
+    handleTabChange("issues");
+
     setToast(
-      `Issue submitted for ${activeArea?.name ?? "the selected area"}.`,
+      `Issue submitted for ${activeArea?.name ?? "the selected area"
+      }.`,
     );
+  };
+
+  const handleIssueUpdate = (updatedIssue) => {
+    setAllIssues((currentIssues) =>
+      currentIssues.map((issue) =>
+        issue.id === updatedIssue.id
+          ? updatedIssue
+          : issue,
+      ),
+    );
+
+    setToast("Issue updated.");
   };
 
   const renderPage = () => {
@@ -113,7 +189,7 @@ function App() {
           issues={issues}
           announcements={announcements}
           upkeepTasks={upkeepTasks}
-          onNavigate={setActiveTab}
+          onNavigate={handleTabChange}
         />
       );
     }
@@ -121,11 +197,33 @@ function App() {
     if (activeTab === "report") {
       return (
         <ReportIssuePage
-          // Reset unfinished form state when the user changes areas.
+          // Reset unfinished form state when the selected area changes.
           key={activeAreaCode}
           activeArea={activeArea}
           onSubmit={handleIssueSubmit}
-          onCancel={() => setActiveTab("home")}
+          onCancel={() => handleTabChange("home")}
+        />
+      );
+    }
+
+    if (activeTab === "issues") {
+      if (selectedIssue) {
+        return (
+          <IssueDetailPage
+            issue={selectedIssue}
+            profile={DEMO_PROFILE}
+            activeArea={activeArea}
+            onBack={() => setSelectedIssueId(null)}
+            onUpdate={handleIssueUpdate}
+          />
+        );
+      }
+
+      return (
+        <IssuesPage
+          activeArea={activeArea}
+          issues={issues}
+          onOpenIssue={setSelectedIssueId}
         />
       );
     }
@@ -143,9 +241,9 @@ function App() {
       <AppShell
         profile={DEMO_PROFILE}
         activeAreaCode={activeAreaCode}
-        onAreaChange={setActiveAreaCode}
+        onAreaChange={handleAreaChange}
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
       >
         {renderPage()}
       </AppShell>

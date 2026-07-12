@@ -3,6 +3,12 @@ export const AREA_TYPES = {
   COMMON: "common",
 };
 
+// All areas is a viewing context for operational users.
+// It is not stored as a real area in the database.
+export const ALL_AREAS_CODE = "ALL";
+
+export const CLUBHOUSE_CODE = "CLUBHOUSE";
+
 export const AREAS = [
   { code: "S1", name: "Villa S1", type: AREA_TYPES.VILLA },
   { code: "S2", name: "Villa S2", type: AREA_TYPES.VILLA },
@@ -13,14 +19,20 @@ export const AREAS = [
   { code: "E3", name: "Villa E3", type: AREA_TYPES.VILLA },
   { code: "E4", name: "Villa E4", type: AREA_TYPES.VILLA },
   {
-    code: "CLUBHOUSE",
+    code: CLUBHOUSE_CODE,
     name: "Clubhouse",
     type: AREA_TYPES.COMMON,
   },
 ];
 
-export const CLUBHOUSE_CODE = "CLUBHOUSE";
-
 export function getAreaByCode(code) {
+  if (code === ALL_AREAS_CODE) {
+    return {
+      code: ALL_AREAS_CODE,
+      name: "All areas",
+      type: "virtual",
+    };
+  }
+
   return AREAS.find((area) => area.code === code) ?? null;
 }
