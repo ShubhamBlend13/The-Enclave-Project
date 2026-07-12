@@ -9,6 +9,7 @@ import HomePage from "./pages/HomePage";
 import IssueDetailPage from "./pages/IssueDetailPage";
 import IssuesPage from "./pages/IssuesPage";
 import ReportIssuePage from "./pages/ReportIssuePage";
+import UpkeepPage from "./pages/UpkeepPage";
 
 import {
   ALL_AREAS_CODE,
@@ -16,11 +17,13 @@ import {
 } from "./constants/areas";
 import { ISSUE_STATUSES } from "./constants/issues";
 import {
+  canManageUpkeep,
   canPostAnnouncements,
   canViewCommunity,
   USER_ROLES,
 } from "./constants/roles";
 import { THEME } from "./constants/theme";
+import { calculateNextDue } from "./utils/upkeep";
 
 import {
   DEMO_ANNOUNCEMENTS,
@@ -77,6 +80,13 @@ function App() {
   const [allAnnouncements, setAllAnnouncements] =
     useState(DEMO_ANNOUNCEMENTS);
 
+  // Upkeep schedules and completion history remain local until Supabase is connected.
+  const [allUpkeepTasks, setAllUpkeepTasks] =
+    useState(DEMO_UPKEEP_TASKS);
+
+  const [allUpkeepHistory, setAllUpkeepHistory] =
+    useState([]);
+
   const [selectedIssueId, setSelectedIssueId] =
     useState(null);
 
@@ -110,12 +120,19 @@ function App() {
 
   const upkeepTasks =
     activeAreaCode === ALL_AREAS_CODE
-      ? DEMO_UPKEEP_TASKS
-      : DEMO_UPKEEP_TASKS.filter(
+      ? allUpkeepTasks
+      : allUpkeepTasks.filter(
         (task) =>
           task.areaCode === activeAreaCode,
       );
 
+  const upkeepHistory =
+    activeAreaCode === ALL_AREAS_CODE
+      ? allUpkeepHistory
+      : allUpkeepHistory.filter(
+        (entry) =>
+          entry.areaCode === activeAreaCode,
+      );
   const selectedIssue = issues.find(
     (issue) => issue.id === selectedIssueId,
   );
@@ -280,6 +297,137 @@ function App() {
     );
   };
 
+  const handleUpkeepSave = async (formData) => {
+    if (!canManageUpkeep(profile)) {
+      setToast(
+        "You do not have permission to manage upkeep.",
+      );
+
+      return;
+    }
+
+    const taskArea = getAreaByCode(
+      formData.areaCode,
+    );
+
+    if (
+      !taskArea ||
+      formData.areaCode === ALL_AREAS_CODE
+    ) {
+      setToast(
+        "Choose a valid area for this upkeep schedule.",
+      );
+
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+
+    if (formData.id) {
+      setAllUpkeepTasks((currentTasks) =>
+        currentTasks.map((task) =>
+          task.id === formData.id
+            ? {
+              ...task,
+              areaCode: formData.areaCode,
+              title: formData.title,
+              icon: formData.icon,
+              frequency: formData.frequency,
+              nextDue: formData.nextDue,
+              updatedAt: timestamp,
+            }
+            : task,
+        ),
+      );
+
+      setToast("Upkeep schedule updated.");
+      return;
+    }
+
+    const newTask = {
+      id: createId(),
+      areaCode: formData.areaCode,
+      title: formData.title,
+      icon: formData.icon,
+      frequency: formData.frequency,
+      nextDue: formData.nextDue,
+      lastCompletedAt: null,
+      isActive: true,
+      createdBy: profile.fullName,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+
+    setAllUpkeepTasks((currentTasks) => [
+      newTask,
+      ...currentTasks,
+    ]);
+
+    setToast(
+      `Upkeep schedule created for ${taskArea.name}.`,
+    );
+  };
+
+  const handleUpkeepComplete = async (
+    taskId,
+    note,
+  ) => {
+    if (!canManageUpkeep(profile)) {
+      setToast(
+        "You do not have permission to complete upkeep tasks.",
+      );
+
+      return;
+    }
+
+    const task = allUpkeepTasks.find(
+      (item) => item.id === taskId,
+    );
+
+    if (!task) {
+      setToast("Upkeep task was not found.");
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+
+    const nextDue =
+      calculateNextDue(
+        timestamp,
+        task.frequency,
+      ) ?? task.nextDue;
+
+    setAllUpkeepTasks((currentTasks) =>
+      currentTasks.map((currentTask) =>
+        currentTask.id === taskId
+          ? {
+            ...currentTask,
+            lastCompletedAt: timestamp,
+            nextDue,
+            updatedAt: timestamp,
+          }
+          : currentTask,
+      ),
+    );
+
+    const historyEntry = {
+      id: createId(),
+      taskId: task.id,
+      taskTitle: task.title,
+      areaCode: task.areaCode,
+      completedBy: profile.fullName,
+      completedAt: timestamp,
+      note,
+    };
+
+    setAllUpkeepHistory((currentHistory) => [
+      historyEntry,
+      ...currentHistory,
+    ]);
+
+    setToast(`${task.title} marked complete.`);
+  };
+
   const renderPage = () => {
     if (activeTab === "home") {
       return (
@@ -331,6 +479,19 @@ function App() {
           activeArea={activeArea}
           issues={issues}
           onOpenIssue={setSelectedIssueId}
+        />
+      );
+    }
+
+    if (activeTab === "upkeep") {
+      return (
+        <UpkeepPage
+          profile={profile}
+          activeArea={activeArea}
+          tasks={upkeepTasks}
+          history={upkeepHistory}
+          onSaveTask={handleUpkeepSave}
+          onCompleteTask={handleUpkeepComplete}
         />
       );
     }
