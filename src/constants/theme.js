@@ -1,0 +1,15 @@
+export const THEME = {
+  bg: "#F4F2EC",
+  card: "#FFFFFF",
+  ink: "#1C2B26",
+  green: "#1F4438",
+  greenSoft: "#E4ECE6",
+  brass: "#A8813C",
+  brassSoft: "#F3EBDA",
+  line: "#E3DFD4",
+  mute: "#6E7A72",
+  red: "#B3432B",
+  amber: "#B07A1E",
+  blue: "#2D5B8A",
+  ok: "#2E6B4F",
+};
