@@ -1,21 +1,26 @@
 import { useState } from "react";
 
 import AppShell from "./components/AppShell";
+import HomePage from "./pages/HomePage";
 import { getAreaByCode } from "./constants/areas";
 import { USER_ROLES } from "./constants/roles";
 import { THEME } from "./constants/theme";
+import {
+  DEMO_ANNOUNCEMENTS,
+  DEMO_ISSUES,
+  DEMO_UPKEEP_TASKS,
+} from "./data/demoData";
 import { getDefaultAreaCode } from "./utils/areaAccess";
 
-// Temporary local profile until Supabase Auth is connected.
+// This profile exists only until Supabase authentication is connected.
 const DEMO_PROFILE = {
   id: "demo-s1-admin",
-  fullName: "Iron Man",
+  fullName: "Sunil Tenali",
   role: USER_ROLES.VILLA_ADMIN,
   homeAreaCode: "S1",
 };
 
 const TAB_TITLES = {
-  home: "Home",
   report: "Report an issue",
   issues: "Issues",
   upkeep: "Upkeep",
@@ -30,6 +35,43 @@ function App() {
 
   const activeArea = getAreaByCode(activeAreaCode);
 
+  // Area filtering happens before data reaches each page.
+  // Supabase queries will later apply this same area constraint.
+  const issues = DEMO_ISSUES.filter(
+    (issue) => issue.areaCode === activeAreaCode,
+  );
+
+  const announcements = DEMO_ANNOUNCEMENTS.filter(
+    (announcement) =>
+      announcement.areaCode === activeAreaCode,
+  );
+
+  const upkeepTasks = DEMO_UPKEEP_TASKS.filter(
+    (task) => task.areaCode === activeAreaCode,
+  );
+
+  const renderPage = () => {
+    if (activeTab === "home") {
+      return (
+        <HomePage
+          profile={DEMO_PROFILE}
+          activeArea={activeArea}
+          issues={issues}
+          announcements={announcements}
+          upkeepTasks={upkeepTasks}
+          onNavigate={setActiveTab}
+        />
+      );
+    }
+
+    return (
+      <PagePlaceholder
+        title={TAB_TITLES[activeTab]}
+        areaName={activeArea?.name}
+      />
+    );
+  };
+
   return (
     <AppShell
       profile={DEMO_PROFILE}
@@ -38,68 +80,50 @@ function App() {
       activeTab={activeTab}
       onTabChange={setActiveTab}
     >
-      <section>
-        <h1
-          style={{
-            margin: "4px 0 6px",
-            color: THEME.ink,
-            fontFamily: "'Marcellus', serif",
-            fontSize: 28,
-            fontWeight: 400,
-          }}
-        >
-          {TAB_TITLES[activeTab]}
-        </h1>
-
-        <p
-          style={{
-            margin: 0,
-            color: THEME.mute,
-            fontSize: 14,
-          }}
-        >
-          Showing {activeArea?.name ?? "unknown area"}
-        </p>
-
-        {/* Temporary card proves that area context survives bottom-nav changes. */}
-        <div
-          style={{
-            marginTop: 22,
-            padding: 18,
-            border: `1px solid ${THEME.line}`,
-            borderRadius: 16,
-            background: THEME.card,
-          }}
-        >
-          <div
-            style={{
-              color: THEME.ink,
-              fontSize: 15,
-              fontWeight: 700,
-            }}
-          >
-            Current prototype context
-          </div>
-
-          <div
-            style={{
-              marginTop: 8,
-              color: THEME.mute,
-              fontSize: 14,
-              lineHeight: 1.6,
-            }}
-          >
-            User: {DEMO_PROFILE.fullName}
-            <br />
-            Role: {DEMO_PROFILE.role}
-            <br />
-            Area: {activeArea?.code}
-            <br />
-            Page: {activeTab}
-          </div>
-        </div>
-      </section>
+      {renderPage()}
     </AppShell>
+  );
+}
+
+function PagePlaceholder({ title, areaName }) {
+  return (
+    <section>
+      <h1
+        style={{
+          margin: "4px 0 6px",
+          color: THEME.ink,
+          fontFamily: "'Marcellus', serif",
+          fontSize: 28,
+          fontWeight: 400,
+        }}
+      >
+        {title}
+      </h1>
+
+      <p
+        style={{
+          margin: 0,
+          color: THEME.mute,
+          fontSize: 14,
+        }}
+      >
+        {areaName}
+      </p>
+
+      <div
+        style={{
+          marginTop: 22,
+          padding: 18,
+          border: `1px solid ${THEME.line}`,
+          borderRadius: 16,
+          background: THEME.card,
+          color: THEME.mute,
+          fontSize: 14,
+        }}
+      >
+        This workflow is being connected next.
+      </div>
+    </section>
   );
 }
 

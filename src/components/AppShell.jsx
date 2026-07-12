@@ -22,21 +22,10 @@ function AppShell({
     >
       <header
         style={{
-          padding: "22px 20px 8px",
+          padding: "12px 20px 4px",
         }}
       >
-        <div
-          style={{
-            color: THEME.brass,
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: 2.5,
-          }}
-        >
-          THE ENCLAVE
-        </div>
-
-        {/* Area context stays outside individual pages so every tab follows it. */}
+        {/* Area selection lives above every page so context survives navigation. */}
         <AreaSwitcher
           profile={profile}
           activeAreaCode={activeAreaCode}
