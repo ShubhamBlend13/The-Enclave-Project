@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 
 import AppShell from "./components/AppShell";
+import DevRoleSwitcher from "./components/DevRoleSwitcher";
 import Toast from "./components/Toast";
+
 import HomePage from "./pages/HomePage";
 import IssueDetailPage from "./pages/IssueDetailPage";
 import IssuesPage from "./pages/IssuesPage";
 import ReportIssuePage from "./pages/ReportIssuePage";
+
 import {
   ALL_AREAS_CODE,
   getAreaByCode,
@@ -13,21 +16,16 @@ import {
 import { ISSUE_STATUSES } from "./constants/issues";
 import { USER_ROLES } from "./constants/roles";
 import { THEME } from "./constants/theme";
+
 import {
   DEMO_ANNOUNCEMENTS,
   DEMO_ISSUES,
   DEMO_UPKEEP_TASKS,
 } from "./data/demoData";
+import { DEMO_PROFILES } from "./data/demoProfiles";
+
 import { getDefaultAreaCode } from "./utils/areaAccess";
 import { createId } from "./utils/id";
-
-// This local profile will be replaced by the authenticated Supabase profile.
-const DEMO_PROFILE = {
-  id: "demo-s1-admin",
-  fullName: "Tony Stark",
-  role: USER_ROLES.VILLA_ADMIN,
-  homeAreaCode: "S1",
-};
 
 const TAB_TITLES = {
   upkeep: "Upkeep",
@@ -35,26 +33,41 @@ const TAB_TITLES = {
 };
 
 function getDefaultTab(profile) {
-  // Operational users should land directly on the work queue.
+  // The upkeep manager starts directly with the active work queue.
   if (profile.role === USER_ROLES.UPKEEP_MANAGER) {
     return "issues";
   }
 
-  // Residents and villa admins start with their area dashboard.
+  // Residents, villa admins and the owner currently start at Home.
   return "home";
 }
 
+function getInitialDemoProfile() {
+  // Keep our operational user as the default while testing issue workflows.
+  return (
+    DEMO_PROFILES.find(
+      (item) => item.id === "demo-upkeep-manager",
+    ) ?? DEMO_PROFILES[0]
+  );
+}
+
 function App() {
+  const [profile, setProfile] = useState(
+    getInitialDemoProfile,
+  );
+
   const [activeTab, setActiveTab] = useState(() =>
-    getDefaultTab(DEMO_PROFILE),
+    getDefaultTab(getInitialDemoProfile()),
   );
 
-  const [activeAreaCode, setActiveAreaCode] = useState(() =>
-    getDefaultAreaCode(DEMO_PROFILE),
+  const [activeAreaCode, setActiveAreaCode] = useState(
+    () =>
+      getDefaultAreaCode(getInitialDemoProfile()),
   );
 
-  // Local issue state lets us test create and update workflows before Supabase.
-  const [allIssues, setAllIssues] = useState(DEMO_ISSUES);
+  // Issues stay in local state until Supabase replaces the demo data source.
+  const [allIssues, setAllIssues] =
+    useState(DEMO_ISSUES);
 
   const [selectedIssueId, setSelectedIssueId] =
     useState(null);
@@ -63,29 +76,31 @@ function App() {
 
   const activeArea = getAreaByCode(activeAreaCode);
 
-  // All Areas removes the area constraint for operational work queues.
+  // ALL is a virtual operational view and removes the area filter.
   const issues =
     activeAreaCode === ALL_AREAS_CODE
       ? allIssues
       : allIssues.filter(
-        (issue) => issue.areaCode === activeAreaCode,
-      );
+          (issue) =>
+            issue.areaCode === activeAreaCode,
+        );
 
-  // Announcements still belong to one real area.
+  // Announcements always belong to one real area.
   const announcements =
     activeAreaCode === ALL_AREAS_CODE
       ? []
       : DEMO_ANNOUNCEMENTS.filter(
-        (announcement) =>
-          announcement.areaCode === activeAreaCode,
-      );
+          (announcement) =>
+            announcement.areaCode === activeAreaCode,
+        );
 
   const upkeepTasks =
     activeAreaCode === ALL_AREAS_CODE
       ? DEMO_UPKEEP_TASKS
       : DEMO_UPKEEP_TASKS.filter(
-        (task) => task.areaCode === activeAreaCode,
-      );
+          (task) =>
+            task.areaCode === activeAreaCode,
+        );
 
   const selectedIssue = issues.find(
     (issue) => issue.id === selectedIssueId,
@@ -96,6 +111,7 @@ function App() {
       return undefined;
     }
 
+    // Toast messages clear themselves after a short confirmation period.
     const timerId = window.setTimeout(() => {
       setToast("");
     }, 2600);
@@ -105,8 +121,30 @@ function App() {
     };
   }, [toast]);
 
+  const handleProfileChange = (profileId) => {
+    const nextProfile = DEMO_PROFILES.find(
+      (item) => item.id === profileId,
+    );
+
+    if (!nextProfile) {
+      return;
+    }
+
+    // Every demo user starts in an area and tab permitted for their role.
+    setProfile(nextProfile);
+    setActiveAreaCode(
+      getDefaultAreaCode(nextProfile),
+    );
+    setActiveTab(getDefaultTab(nextProfile));
+    setSelectedIssueId(null);
+
+    setToast(
+      `Demo switched to ${nextProfile.label}.`,
+    );
+  };
+
   const handleAreaChange = (areaCode) => {
-    // An issue from one area must not remain open after switching context.
+    // An issue detail from one area must not remain open in another context.
     setActiveAreaCode(areaCode);
     setSelectedIssueId(null);
   };
@@ -114,19 +152,24 @@ function App() {
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
 
-    // Pressing a bottom-navigation item returns to its main page.
+    // Bottom navigation always returns to the selected tab's root page.
     setSelectedIssueId(null);
   };
 
   const handleIssueSubmit = async (formData) => {
-    // ALL is a virtual viewing context and must never be stored on an issue.
-    const reportArea = getAreaByCode(formData.areaCode);
+    // ALL is only a viewing context and must never be stored on an issue.
+    const reportArea = getAreaByCode(
+      formData.areaCode,
+    );
 
     if (
       !reportArea ||
       formData.areaCode === ALL_AREAS_CODE
     ) {
-      setToast("Choose a valid area for this issue.");
+      setToast(
+        "Choose a valid area for this issue.",
+      );
+
       return;
     }
 
@@ -140,7 +183,7 @@ function App() {
       description: formData.description,
       priority: formData.priority,
       status: ISSUE_STATUSES.OPEN,
-      reportedBy: DEMO_PROFILE.fullName,
+      reportedBy: profile.fullName,
       createdAt: timestamp,
       updatedAt: timestamp,
       resolvedAt: null,
@@ -148,7 +191,7 @@ function App() {
         {
           id: createId(),
           message: "Issue reported",
-          createdBy: DEMO_PROFILE.fullName,
+          createdBy: profile.fullName,
           createdAt: timestamp,
         },
       ],
@@ -182,7 +225,7 @@ function App() {
     if (activeTab === "home") {
       return (
         <HomePage
-          profile={DEMO_PROFILE}
+          profile={profile}
           activeArea={activeArea}
           issues={issues}
           announcements={announcements}
@@ -195,13 +238,15 @@ function App() {
     if (activeTab === "report") {
       return (
         <ReportIssuePage
-          // A fresh form is created each time the reporting context changes.
+          // Changing area creates a fresh form with the correct report context.
           key={activeAreaCode}
-          profile={DEMO_PROFILE}
+          profile={profile}
           activeArea={activeArea}
           onSubmit={handleIssueSubmit}
           onCancel={() =>
-            handleTabChange(getDefaultTab(DEMO_PROFILE))
+            handleTabChange(
+              getDefaultTab(profile),
+            )
           }
         />
       );
@@ -212,9 +257,11 @@ function App() {
         return (
           <IssueDetailPage
             issue={selectedIssue}
-            profile={DEMO_PROFILE}
+            profile={profile}
             activeArea={activeArea}
-            onBack={() => setSelectedIssueId(null)}
+            onBack={() =>
+              setSelectedIssueId(null)
+            }
             onUpdate={handleIssueUpdate}
           />
         );
@@ -240,7 +287,7 @@ function App() {
   return (
     <>
       <AppShell
-        profile={DEMO_PROFILE}
+        profile={profile}
         activeAreaCode={activeAreaCode}
         onAreaChange={handleAreaChange}
         activeTab={activeTab}
@@ -250,6 +297,12 @@ function App() {
       </AppShell>
 
       <Toast message={toast} />
+
+      {/* Local-only helper for testing every role without editing App.jsx. */}
+      <DevRoleSwitcher
+        activeProfileId={profile.id}
+        onProfileChange={handleProfileChange}
+      />
     </>
   );
 }
