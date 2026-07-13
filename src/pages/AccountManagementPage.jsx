@@ -368,7 +368,7 @@ function CreateAccountForm({
             onChange={(event) =>
               setPhone(event.target.value)
             }
-            placeholder="+91..."
+            placeholder="XXXXXXXXXX"
             style={INPUT_STYLE}
           />
         </Field>
@@ -425,7 +425,7 @@ function CreateAccountForm({
               event.target.value,
             )
           }
-          placeholder="Minimum 6 characters"
+          placeholder="Minimum 8 characters"
           style={INPUT_STYLE}
         />
       </Field>

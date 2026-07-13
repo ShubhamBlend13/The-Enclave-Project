@@ -15,6 +15,8 @@ export function useIssueData({
   profile,
   enabled,
 }) {
+  const profileId = profile?.id ?? null;
+
   const [areas, setAreas] = useState([]);
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] =
@@ -22,7 +24,7 @@ export function useIssueData({
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
-    if (!enabled || !profile?.id) {
+    if (!enabled || !profileId) {
       setAreas([]);
       setIssues([]);
       setLoading(false);
@@ -51,10 +53,18 @@ export function useIssueData({
     } finally {
       setLoading(false);
     }
-  }, [enabled, profile?.id]);
+  }, [enabled, profileId]);
 
   useEffect(() => {
-    void refresh();
+    // Defer the initial request so state is not changed
+    // synchronously inside the effect body.
+    const timerId = window.setTimeout(() => {
+      void refresh();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
   }, [refresh]);
 
   const createIssue = useCallback(
@@ -73,7 +83,7 @@ export function useIssueData({
       const createdIssue =
         await createIssueRecord({
           areaId: area.id,
-          reportedBy: profile.id,
+          reportedBy: profileId,
           category: formData.category,
           location: formData.location,
           description: formData.description,
@@ -87,7 +97,7 @@ export function useIssueData({
 
       return createdIssue;
     },
-    [areas, profile?.id],
+    [areas, profileId],
   );
 
   const applyIssueUpdate = useCallback(
@@ -114,7 +124,7 @@ export function useIssueData({
 
       const newStatus =
         updatedIssue.status !==
-        currentIssue.status
+          currentIssue.status
           ? updatedIssue.status
           : null;
 

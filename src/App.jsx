@@ -1,18 +1,21 @@
 import { useEffect, useState } from "react";
 
-import AppShell from "./components/AppShell";
+import { useUserData } from "./hooks/useUserData";
 import { useIssueData } from "./hooks/useIssueData";
+
+import AppShell from "./components/AppShell";
 import DevRoleSwitcher from "./components/DevRoleSwitcher";
 import Toast from "./components/Toast";
+
 import CommunityPage from "./pages/CommunityPage";
 import AccountManagementPage from "./pages/AccountManagementPage";
-import { DEMO_USERS } from "./data/demoUsers";
-
 import HomePage from "./pages/HomePage";
 import IssueDetailPage from "./pages/IssueDetailPage";
 import IssuesPage from "./pages/IssuesPage";
 import ReportIssuePage from "./pages/ReportIssuePage";
 import UpkeepPage from "./pages/UpkeepPage";
+
+import { DEMO_USERS } from "./data/demoUsers";
 
 import {
   ALL_AREAS_CODE,
@@ -96,6 +99,35 @@ function App({
   const usingSupabase =
     Boolean(authenticatedProfile);
 
+  // Demo accounts remain available only when App is used
+  // without a real authenticated Supabase profile.
+  const [demoUsers, setDemoUsers] =
+    useState(DEMO_USERS);
+
+  const accountDataEnabled =
+    usingSupabase &&
+    (
+      isOwnerAdmin(profile) ||
+      isVillaAdmin(profile)
+    );
+
+  const {
+    users: databaseUsers,
+    error: usersError,
+    createUser: createDatabaseUser,
+    resetPassword:
+    resetDatabaseUserPassword,
+    setUserActive:
+    setDatabaseUserActive,
+  } = useUserData({
+    profile,
+    enabled: accountDataEnabled,
+  });
+
+  const allUsers = usingSupabase
+    ? databaseUsers
+    : demoUsers;
+
   const {
     issues: databaseIssues,
     loading: issuesLoading,
@@ -122,10 +154,6 @@ function App({
 
   const [allUpkeepHistory, setAllUpkeepHistory] =
     useState([]);
-
-  // Account metadata is local for now; authentication remains a later Supabase step.
-  const [allUsers, setAllUsers] =
-    useState(DEMO_USERS);
 
   const [moreView, setMoreView] =
     useState("community");
@@ -196,11 +224,22 @@ function App({
   }, [toast]);
 
   useEffect(() => {
-    // Surface Supabase issue-loading errors through the existing toast UI.
-    if (issuesError) {
-      setToast(issuesError);
+    const dataError =
+      issuesError || usersError;
+
+    if (!dataError) {
+      return undefined;
     }
-  }, [issuesError]);
+
+    // Defer the toast update outside the synchronous effect body.
+    const timerId = window.setTimeout(() => {
+      setToast(dataError);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [issuesError, usersError]);
 
   const handleProfileChange = (profileId) => {
     if (authenticatedProfile) {
@@ -528,7 +567,8 @@ function App({
     const villaAdminCreatingResident =
       isVillaAdmin(profile) &&
       formData.role === USER_ROLES.RESIDENT &&
-      formData.homeAreaCode === profile.homeAreaCode;
+      formData.homeAreaCode ===
+      profile.homeAreaCode;
 
     const ownerCreatingManagedAccount =
       isOwnerAdmin(profile) &&
@@ -558,10 +598,15 @@ function App({
 
     const duplicateIdentity = allUsers.some(
       (user) =>
-        (formData.phone &&
-          user.phone === formData.phone) ||
-        (formData.employeeId &&
-          user.employeeId === formData.employeeId),
+        (
+          formData.phone &&
+          user.phone === formData.phone
+        ) ||
+        (
+          formData.employeeId &&
+          user.employeeId ===
+          formData.employeeId
+        ),
     );
 
     if (duplicateIdentity) {
@@ -572,28 +617,49 @@ function App({
       return false;
     }
 
-    const newUser = {
-      id: createId(),
-      fullName: formData.fullName,
-      phone: formData.phone,
-      employeeId: formData.employeeId,
-      role: formData.role,
-      homeAreaCode: formData.homeAreaCode,
-      mustChangePassword: true,
-      isActive: true,
-    };
+    try {
+      if (usingSupabase) {
+        const createdUser =
+          await createDatabaseUser(formData);
 
-    // The temporary password is intentionally not stored in frontend account state.
-    setAllUsers((currentUsers) => [
-      newUser,
-      ...currentUsers,
-    ]);
+        setToast(
+          `${createdUser.fullName}'s account was created.`,
+        );
 
-    setToast(
-      `${newUser.fullName}'s account was created.`,
-    );
+        return true;
+      }
 
-    return true;
+      const newUser = {
+        id: createId(),
+        fullName: formData.fullName,
+        phone: formData.phone,
+        employeeId: formData.employeeId,
+        role: formData.role,
+        homeAreaCode: formData.homeAreaCode,
+        mustChangePassword: true,
+        isActive: true,
+      };
+
+      // Temporary passwords are never stored in frontend state.
+      setDemoUsers((currentUsers) => [
+        newUser,
+        ...currentUsers,
+      ]);
+
+      setToast(
+        `${newUser.fullName}'s account was created.`,
+      );
+
+      return true;
+    } catch (error) {
+      setToast(
+        error instanceof Error
+          ? error.message
+          : "The account could not be created.",
+      );
+
+      return false;
+    }
   };
 
   const handleUserPasswordReset = async (
@@ -615,31 +681,47 @@ function App({
       return false;
     }
 
-    if (temporaryPassword.length < 6) {
+    if (temporaryPassword.length < 8) {
       setToast(
-        "Temporary password must have at least 6 characters.",
+        "Temporary password must have at least 8 characters.",
       );
 
       return false;
     }
 
-    // The real implementation will send this password to a protected Edge Function.
-    setAllUsers((currentUsers) =>
-      currentUsers.map((user) =>
-        user.id === userId
-          ? {
-            ...user,
-            mustChangePassword: true,
-          }
-          : user,
-      ),
-    );
+    try {
+      if (usingSupabase) {
+        await resetDatabaseUserPassword({
+          userId,
+          temporaryPassword,
+        });
+      } else {
+        setDemoUsers((currentUsers) =>
+          currentUsers.map((user) =>
+            user.id === userId
+              ? {
+                ...user,
+                mustChangePassword: true,
+              }
+              : user,
+          ),
+        );
+      }
 
-    setToast(
-      `Temporary password reset for ${targetUser.fullName}.`,
-    );
+      setToast(
+        `Temporary password reset for ${targetUser.fullName}.`,
+      );
 
-    return true;
+      return true;
+    } catch (error) {
+      setToast(
+        error instanceof Error
+          ? error.message
+          : "The password could not be reset.",
+      );
+
+      return false;
+    }
   };
 
   const handleUserActiveChange = async (
@@ -661,23 +743,42 @@ function App({
       return false;
     }
 
-    setAllUsers((currentUsers) =>
-      currentUsers.map((user) =>
-        user.id === userId
-          ? {
-            ...user,
-            isActive,
-          }
-          : user,
-      ),
-    );
+    try {
+      if (usingSupabase) {
+        await setDatabaseUserActive({
+          userId,
+          isActive,
+        });
+      } else {
+        setDemoUsers((currentUsers) =>
+          currentUsers.map((user) =>
+            user.id === userId
+              ? {
+                ...user,
+                isActive,
+              }
+              : user,
+          ),
+        );
+      }
 
-    setToast(
-      `${targetUser.fullName} ${isActive ? "reactivated" : "deactivated"
-      }.`,
-    );
+      setToast(
+        `${targetUser.fullName} ${isActive
+          ? "reactivated"
+          : "deactivated"
+        }.`,
+      );
 
-    return true;
+      return true;
+    } catch (error) {
+      setToast(
+        error instanceof Error
+          ? error.message
+          : "The account could not be updated.",
+      );
+
+      return false;
+    }
   };
 
   const renderPage = () => {
