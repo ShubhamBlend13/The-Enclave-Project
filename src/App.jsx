@@ -63,19 +63,29 @@ function getInitialDemoProfile() {
   );
 }
 
-function App() {
-  const [profile, setProfile] = useState(
+function App({
+  authenticatedProfile = null,
+  onSignOut = null,
+}) {
+  const [demoProfile, setDemoProfile] = useState(
     getInitialDemoProfile,
   );
 
+  const profile =
+    authenticatedProfile ?? demoProfile;
+
+  const initialProfile =
+    authenticatedProfile ??
+    getInitialDemoProfile();
+
   const [activeTab, setActiveTab] = useState(() =>
-    getDefaultTab(getInitialDemoProfile()),
+    getDefaultTab(initialProfile),
   );
 
-  const [activeAreaCode, setActiveAreaCode] = useState(
-    () =>
-      getDefaultAreaCode(getInitialDemoProfile()),
-  );
+  const [activeAreaCode, setActiveAreaCode] =
+    useState(() =>
+      getDefaultAreaCode(initialProfile),
+    );
 
   // Issues stay in local state until Supabase replaces the demo data source.
   const [allIssues, setAllIssues] =
@@ -165,6 +175,9 @@ function App() {
   }, [toast]);
 
   const handleProfileChange = (profileId) => {
+    if (authenticatedProfile) {
+      return;
+    }
     const nextProfile = DEMO_PROFILES.find(
       (item) => item.id === profileId,
     );
@@ -174,7 +187,7 @@ function App() {
     }
 
     // Every demo user starts in an area and tab permitted for their role.
-    setProfile(nextProfile);
+    setDemoProfile(nextProfile);
     setActiveAreaCode(
       getDefaultAreaCode(nextProfile),
     );
@@ -446,160 +459,160 @@ function App() {
   };
 
   const handleUserCreate = async (formData) => {
-      const villaAdminCreatingResident =
-        isVillaAdmin(profile) &&
-        formData.role === USER_ROLES.RESIDENT &&
-        formData.homeAreaCode === profile.homeAreaCode;
+    const villaAdminCreatingResident =
+      isVillaAdmin(profile) &&
+      formData.role === USER_ROLES.RESIDENT &&
+      formData.homeAreaCode === profile.homeAreaCode;
 
-      const ownerCreatingManagedAccount =
-        isOwnerAdmin(profile) &&
-        [
-          USER_ROLES.VILLA_ADMIN,
-          USER_ROLES.UPKEEP_MANAGER,
-        ].includes(formData.role);
+    const ownerCreatingManagedAccount =
+      isOwnerAdmin(profile) &&
+      [
+        USER_ROLES.VILLA_ADMIN,
+        USER_ROLES.UPKEEP_MANAGER,
+      ].includes(formData.role);
 
-      if (
-        !villaAdminCreatingResident &&
-        !ownerCreatingManagedAccount
-      ) {
-        setToast(
-          "You do not have permission to create this account.",
-        );
-
-        return false;
-      }
-
-      if (
-        formData.role === USER_ROLES.VILLA_ADMIN &&
-        !getAreaByCode(formData.homeAreaCode)
-      ) {
-        setToast("Choose a valid villa.");
-        return false;
-      }
-
-      const duplicateIdentity = allUsers.some(
-        (user) =>
-          (formData.phone &&
-            user.phone === formData.phone) ||
-          (formData.employeeId &&
-            user.employeeId === formData.employeeId),
-      );
-
-      if (duplicateIdentity) {
-        setToast(
-          "An account with this phone or employee ID already exists.",
-        );
-
-        return false;
-      }
-
-      const newUser = {
-        id: createId(),
-        fullName: formData.fullName,
-        phone: formData.phone,
-        employeeId: formData.employeeId,
-        role: formData.role,
-        homeAreaCode: formData.homeAreaCode,
-        mustChangePassword: true,
-        isActive: true,
-      };
-
-      // The temporary password is intentionally not stored in frontend account state.
-      setAllUsers((currentUsers) => [
-        newUser,
-        ...currentUsers,
-      ]);
-
+    if (
+      !villaAdminCreatingResident &&
+      !ownerCreatingManagedAccount
+    ) {
       setToast(
-        `${newUser.fullName}'s account was created.`,
+        "You do not have permission to create this account.",
       );
 
-      return true;
+      return false;
+    }
+
+    if (
+      formData.role === USER_ROLES.VILLA_ADMIN &&
+      !getAreaByCode(formData.homeAreaCode)
+    ) {
+      setToast("Choose a valid villa.");
+      return false;
+    }
+
+    const duplicateIdentity = allUsers.some(
+      (user) =>
+        (formData.phone &&
+          user.phone === formData.phone) ||
+        (formData.employeeId &&
+          user.employeeId === formData.employeeId),
+    );
+
+    if (duplicateIdentity) {
+      setToast(
+        "An account with this phone or employee ID already exists.",
+      );
+
+      return false;
+    }
+
+    const newUser = {
+      id: createId(),
+      fullName: formData.fullName,
+      phone: formData.phone,
+      employeeId: formData.employeeId,
+      role: formData.role,
+      homeAreaCode: formData.homeAreaCode,
+      mustChangePassword: true,
+      isActive: true,
     };
 
-    const handleUserPasswordReset = async (
-      userId,
-      temporaryPassword,
-    ) => {
-      const targetUser = allUsers.find(
-        (user) => user.id === userId,
-      );
+    // The temporary password is intentionally not stored in frontend account state.
+    setAllUsers((currentUsers) => [
+      newUser,
+      ...currentUsers,
+    ]);
 
-      if (
-        !targetUser ||
-        !canManageUser(profile, targetUser)
-      ) {
-        setToast(
-          "You do not have permission to reset this account.",
-        );
+    setToast(
+      `${newUser.fullName}'s account was created.`,
+    );
 
-        return false;
-      }
+    return true;
+  };
 
-      if (temporaryPassword.length < 6) {
-        setToast(
-          "Temporary password must have at least 6 characters.",
-        );
+  const handleUserPasswordReset = async (
+    userId,
+    temporaryPassword,
+  ) => {
+    const targetUser = allUsers.find(
+      (user) => user.id === userId,
+    );
 
-        return false;
-      }
-
-      // The real implementation will send this password to a protected Edge Function.
-      setAllUsers((currentUsers) =>
-        currentUsers.map((user) =>
-          user.id === userId
-            ? {
-              ...user,
-              mustChangePassword: true,
-            }
-            : user,
-        ),
-      );
-
+    if (
+      !targetUser ||
+      !canManageUser(profile, targetUser)
+    ) {
       setToast(
-        `Temporary password reset for ${targetUser.fullName}.`,
+        "You do not have permission to reset this account.",
       );
 
-      return true;
-    };
+      return false;
+    }
 
-    const handleUserActiveChange = async (
-      userId,
-      isActive,
-    ) => {
-      const targetUser = allUsers.find(
-        (user) => user.id === userId,
-      );
-
-      if (
-        !targetUser ||
-        !canManageUser(profile, targetUser)
-      ) {
-        setToast(
-          "You do not have permission to change this account.",
-        );
-
-        return false;
-      }
-
-      setAllUsers((currentUsers) =>
-        currentUsers.map((user) =>
-          user.id === userId
-            ? {
-              ...user,
-              isActive,
-            }
-            : user,
-        ),
-      );
-
+    if (temporaryPassword.length < 6) {
       setToast(
-        `${targetUser.fullName} ${isActive ? "reactivated" : "deactivated"
-        }.`,
+        "Temporary password must have at least 6 characters.",
       );
 
-      return true;
-    };
+      return false;
+    }
+
+    // The real implementation will send this password to a protected Edge Function.
+    setAllUsers((currentUsers) =>
+      currentUsers.map((user) =>
+        user.id === userId
+          ? {
+            ...user,
+            mustChangePassword: true,
+          }
+          : user,
+      ),
+    );
+
+    setToast(
+      `Temporary password reset for ${targetUser.fullName}.`,
+    );
+
+    return true;
+  };
+
+  const handleUserActiveChange = async (
+    userId,
+    isActive,
+  ) => {
+    const targetUser = allUsers.find(
+      (user) => user.id === userId,
+    );
+
+    if (
+      !targetUser ||
+      !canManageUser(profile, targetUser)
+    ) {
+      setToast(
+        "You do not have permission to change this account.",
+      );
+
+      return false;
+    }
+
+    setAllUsers((currentUsers) =>
+      currentUsers.map((user) =>
+        user.id === userId
+          ? {
+            ...user,
+            isActive,
+          }
+          : user,
+      ),
+    );
+
+    setToast(
+      `${targetUser.fullName} ${isActive ? "reactivated" : "deactivated"
+      }.`,
+    );
+
+    return true;
+  };
 
   const renderPage = () => {
     if (activeTab === "home") {
@@ -707,7 +720,7 @@ function App() {
       );
     }
 
-    
+
 
     return (
       <PagePlaceholder
@@ -725,6 +738,7 @@ function App() {
         onAreaChange={handleAreaChange}
         activeTab={activeTab}
         onTabChange={handleTabChange}
+        onSignOut={onSignOut}
       >
         {renderPage()}
       </AppShell>
@@ -732,10 +746,12 @@ function App() {
       <Toast message={toast} />
 
       {/* Local-only helper for testing every role without editing App.jsx. */}
-      <DevRoleSwitcher
-        activeProfileId={profile.id}
-        onProfileChange={handleProfileChange}
-      />
+      {!authenticatedProfile && (
+        <DevRoleSwitcher
+          activeProfileId={profile.id}
+          onProfileChange={handleProfileChange}
+        />
+      )}
     </>
   );
 }

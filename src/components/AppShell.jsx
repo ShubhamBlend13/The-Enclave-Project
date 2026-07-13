@@ -8,6 +8,7 @@ function AppShell({
   onAreaChange,
   activeTab,
   onTabChange,
+  onSignOut,
   children,
 }) {
   // A report owns its area selection once the form opens.
@@ -24,6 +25,31 @@ function AppShell({
         background: THEME.bg,
       }}
     >
+      {onSignOut && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            padding: "12px 20px 0",
+          }}
+        >
+          <button
+            type="button"
+            onClick={onSignOut}
+            style={{
+              padding: 0,
+              border: "none",
+              background: "transparent",
+              color: THEME.mute,
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      )}
       {showAreaSwitcher && (
         <header
           style={{
