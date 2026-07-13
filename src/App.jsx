@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { useUserData } from "./hooks/useUserData";
 import { useIssueData } from "./hooks/useIssueData";
+import { useAnnouncementData } from "./hooks/useAnnouncementData";
 
 import AppShell from "./components/AppShell";
 import DevRoleSwitcher from "./components/DevRoleSwitcher";
@@ -99,6 +100,29 @@ function App({
   const usingSupabase =
     Boolean(authenticatedProfile);
 
+  // Demo announcements remain available only when App runs
+  // without a real authenticated Supabase profile.
+  const [demoAnnouncements, setDemoAnnouncements] =
+    useState(DEMO_ANNOUNCEMENTS);
+
+  const announcementDataEnabled =
+    usingSupabase &&
+    canViewCommunity(profile);
+
+  const {
+    announcements: databaseAnnouncements,
+    error: announcementsError,
+    createAnnouncement:
+    createDatabaseAnnouncement,
+  } = useAnnouncementData({
+    profile,
+    enabled: announcementDataEnabled,
+  });
+
+  const allAnnouncements = usingSupabase
+    ? databaseAnnouncements
+    : demoAnnouncements;
+
   // Demo accounts remain available only when App is used
   // without a real authenticated Supabase profile.
   const [demoUsers, setDemoUsers] =
@@ -144,9 +168,6 @@ function App({
     ? databaseIssues
     : demoIssues;
 
-  // Announcements are local state until Supabase becomes the shared data source.
-  const [allAnnouncements, setAllAnnouncements] =
-    useState(DEMO_ANNOUNCEMENTS);
 
   // Upkeep schedules and completion history remain local until Supabase is connected.
   const [allUpkeepTasks, setAllUpkeepTasks] =
@@ -225,13 +246,15 @@ function App({
 
   useEffect(() => {
     const dataError =
-      issuesError || usersError;
+      issuesError ||
+      usersError ||
+      announcementsError;
 
     if (!dataError) {
       return undefined;
     }
 
-    // Defer the toast update outside the synchronous effect body.
+    // Surface data-loading failures through the shared toast.
     const timerId = window.setTimeout(() => {
       setToast(dataError);
     }, 0);
@@ -239,7 +262,11 @@ function App({
     return () => {
       window.clearTimeout(timerId);
     };
-  }, [issuesError, usersError]);
+  }, [
+    issuesError,
+    usersError,
+    announcementsError,
+  ]);
 
   const handleProfileChange = (profileId) => {
     if (authenticatedProfile) {
@@ -387,7 +414,9 @@ function App({
     }
   };
 
-  const handleAnnouncementPost = async (formData) => {
+  const handleAnnouncementPost = async (
+    formData,
+  ) => {
     // Only villa admins may create announcements.
     if (!canPostAnnouncements(profile)) {
       setToast(
@@ -413,25 +442,42 @@ function App({
       return;
     }
 
-    const newAnnouncement = {
-      id: createId(),
-      areaCode: activeAreaCode,
-      title: formData.title,
-      body: formData.body,
-      createdBy: profile.fullName,
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      if (usingSupabase) {
+        await createDatabaseAnnouncement({
+          ...formData,
+          areaCode: activeAreaCode,
+        });
+      } else {
+        const newAnnouncement = {
+          id: createId(),
+          areaCode: activeAreaCode,
+          title: formData.title,
+          body: formData.body,
+          createdBy: profile.fullName,
+          createdAt: new Date().toISOString(),
+          isActive: true,
+        };
 
-    setAllAnnouncements((currentAnnouncements) => [
-      newAnnouncement,
-      ...currentAnnouncements,
-    ]);
+        setDemoAnnouncements(
+          (currentAnnouncements) => [
+            newAnnouncement,
+            ...currentAnnouncements,
+          ],
+        );
+      }
 
-    setToast(
-      `Announcement published to ${announcementArea.name}.`,
-    );
+      setToast(
+        `Announcement published to ${announcementArea.name}.`,
+      );
+    } catch (error) {
+      setToast(
+        error instanceof Error
+          ? error.message
+          : "The announcement could not be published.",
+      );
+    }
   };
-
   const handleUpkeepSave = async (formData) => {
     if (!canManageUpkeep(profile)) {
       setToast(
