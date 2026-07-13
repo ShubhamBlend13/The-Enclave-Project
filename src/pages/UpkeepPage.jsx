@@ -16,6 +16,7 @@ import {
   formatDateTime,
   formatDueDate,
 } from "../utils/date";
+import { getEnclaveTodayDate } from "../utils/date";
 import {
   dateInputToIso,
   toDateInputValue,
@@ -31,6 +32,9 @@ const INPUT_STYLE = {
   fontSize: 15,
   outline: "none",
 };
+
+const minimumDueDate =
+  getEnclaveTodayDate();
 
 function UpkeepPage({
   profile,
@@ -397,6 +401,7 @@ function UpkeepTaskForm({
         <input
           type="date"
           value={nextDue}
+          min={minimumDueDate}
           onChange={(event) =>
             setNextDue(event.target.value)
           }

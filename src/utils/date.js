@@ -39,3 +39,34 @@ export function formatDueDate(value) {
     month: "short",
   });
 }
+
+const ENCLAVE_TIME_ZONE = "Asia/Kolkata";
+
+export function getEnclaveTodayDate() {
+  const dateParts = new Intl.DateTimeFormat(
+    "en-US",
+    {
+      timeZone: ENCLAVE_TIME_ZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    },
+  ).formatToParts(new Date());
+
+  const dateValues = Object.fromEntries(
+    dateParts.map((part) => [
+      part.type,
+      part.value,
+    ]),
+  );
+
+  return `${dateValues.year}-${dateValues.month}-${dateValues.day}`;
+}
+
+export function isPastEnclaveDate(dateValue) {
+  if (!dateValue) {
+    return false;
+  }
+
+  return dateValue < getEnclaveTodayDate();
+}

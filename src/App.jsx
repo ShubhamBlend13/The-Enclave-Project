@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useUserData } from "./hooks/useUserData";
 import { useIssueData } from "./hooks/useIssueData";
 import { useAnnouncementData } from "./hooks/useAnnouncementData";
+import { useUpkeepData } from "./hooks/useUpkeepData";
 
 import AppShell from "./components/AppShell";
 import DevRoleSwitcher from "./components/DevRoleSwitcher";
@@ -100,6 +101,48 @@ function App({
   const usingSupabase =
     Boolean(authenticatedProfile);
 
+  // Demo upkeep data remains only for unauthenticated prototype mode.
+  const [demoUpkeepTasks, setDemoUpkeepTasks] =
+    useState(DEMO_UPKEEP_TASKS);
+
+  const [demoUpkeepHistory, setDemoUpkeepHistory] =
+    useState([]);
+
+  const {
+    tasks: databaseUpkeepTasks,
+    error: upkeepError,
+    createTask: createDatabaseUpkeepTask,
+    updateTask: updateDatabaseUpkeepTask,
+    completeTask: completeDatabaseUpkeepTask,
+  } = useUpkeepData({
+    profile,
+    enabled: usingSupabase,
+  });
+
+  const allUpkeepTasks = usingSupabase
+    ? databaseUpkeepTasks
+    : demoUpkeepTasks;
+
+  const databaseUpkeepHistory =
+    databaseUpkeepTasks
+      .flatMap((task) =>
+        task.history.map((entry) => ({
+          ...entry,
+          taskId: task.id,
+          taskTitle: task.title,
+          areaCode: task.areaCode,
+        })),
+      )
+      .sort(
+        (first, second) =>
+          new Date(second.completedAt).getTime() -
+          new Date(first.completedAt).getTime(),
+      );
+
+  const allUpkeepHistory = usingSupabase
+    ? databaseUpkeepHistory
+    : demoUpkeepHistory;
+
   // Demo announcements remain available only when App runs
   // without a real authenticated Supabase profile.
   const [demoAnnouncements, setDemoAnnouncements] =
@@ -167,14 +210,6 @@ function App({
   const allIssues = usingSupabase
     ? databaseIssues
     : demoIssues;
-
-
-  // Upkeep schedules and completion history remain local until Supabase is connected.
-  const [allUpkeepTasks, setAllUpkeepTasks] =
-    useState(DEMO_UPKEEP_TASKS);
-
-  const [allUpkeepHistory, setAllUpkeepHistory] =
-    useState([]);
 
   const [moreView, setMoreView] =
     useState("community");
@@ -248,7 +283,8 @@ function App({
     const dataError =
       issuesError ||
       usersError ||
-      announcementsError;
+      announcementsError ||
+      upkeepError;
 
     if (!dataError) {
       return undefined;
@@ -266,6 +302,7 @@ function App({
     issuesError,
     usersError,
     announcementsError,
+    upkeepError,
   ]);
 
   const handleProfileChange = (profileId) => {
@@ -478,6 +515,7 @@ function App({
       );
     }
   };
+
   const handleUpkeepSave = async (formData) => {
     if (!canManageUpkeep(profile)) {
       setToast(
@@ -502,51 +540,90 @@ function App({
       return;
     }
 
-    const timestamp = new Date().toISOString();
+    try {
+      if (usingSupabase) {
+        if (formData.id) {
+          await updateDatabaseUpkeepTask({
+            taskId: formData.id,
+            areaCode: formData.areaCode,
+            title: formData.title,
+            icon: formData.icon,
+            frequency: formData.frequency,
+            nextDue: formData.nextDue,
+          });
 
-    if (formData.id) {
-      setAllUpkeepTasks((currentTasks) =>
-        currentTasks.map((task) =>
-          task.id === formData.id
-            ? {
-              ...task,
-              areaCode: formData.areaCode,
-              title: formData.title,
-              icon: formData.icon,
-              frequency: formData.frequency,
-              nextDue: formData.nextDue,
-              updatedAt: timestamp,
-            }
-            : task,
-        ),
+          setToast("Upkeep schedule updated.");
+          return;
+        }
+
+        await createDatabaseUpkeepTask({
+          areaCode: formData.areaCode,
+          title: formData.title,
+          icon: formData.icon,
+          frequency: formData.frequency,
+          nextDue: formData.nextDue,
+        });
+
+        setToast(
+          `Upkeep schedule created for ${taskArea.name}.`,
+        );
+
+        return;
+      }
+
+      const timestamp = new Date().toISOString();
+
+      if (formData.id) {
+        setDemoUpkeepTasks((currentTasks) =>
+          currentTasks.map((task) =>
+            task.id === formData.id
+              ? {
+                ...task,
+                areaCode: formData.areaCode,
+                title: formData.title,
+                icon: formData.icon,
+                frequency: formData.frequency,
+                nextDue: formData.nextDue,
+                updatedAt: timestamp,
+              }
+              : task,
+          ),
+        );
+
+        setToast("Upkeep schedule updated.");
+        return;
+      }
+
+      const newTask = {
+        id: createId(),
+        areaCode: formData.areaCode,
+        title: formData.title,
+        icon: formData.icon,
+        frequency: formData.frequency,
+        nextDue: formData.nextDue,
+        lastCompletedAt: null,
+        isActive: true,
+        createdBy: profile.fullName,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        history: [],
+      };
+
+      setDemoUpkeepTasks((currentTasks) => [
+        newTask,
+        ...currentTasks,
+      ]);
+
+      setToast(
+        `Upkeep schedule created for ${taskArea.name}.`,
       );
-
-      setToast("Upkeep schedule updated.");
-      return;
+    } catch (error) {
+      setToast(
+        error instanceof Error
+          ? error.message
+          : "The upkeep schedule could not be saved.",
+      );
     }
-
-    const newTask = {
-      id: createId(),
-      areaCode: formData.areaCode,
-      title: formData.title,
-      icon: formData.icon,
-      frequency: formData.frequency,
-      nextDue: formData.nextDue,
-      lastCompletedAt: null,
-      isActive: true,
-      createdBy: profile.fullName,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-
-    setAllUpkeepTasks((currentTasks) => [
-      newTask,
-      ...currentTasks,
-    ]);
-
-    setToast(
-      `Upkeep schedule created for ${taskArea.name}.`,
-    );
   };
 
   const handleUpkeepComplete = async (
@@ -570,43 +647,61 @@ function App({
       return;
     }
 
-    const timestamp = new Date().toISOString();
+    try {
+      if (usingSupabase) {
+        await completeDatabaseUpkeepTask({
+          taskId,
+          note,
+        });
 
-    const nextDue =
-      calculateNextDue(
-        timestamp,
-        task.frequency,
-      ) ?? task.nextDue;
+        setToast(`${task.title} marked complete.`);
+        return;
+      }
 
-    setAllUpkeepTasks((currentTasks) =>
-      currentTasks.map((currentTask) =>
-        currentTask.id === taskId
-          ? {
-            ...currentTask,
-            lastCompletedAt: timestamp,
-            nextDue,
-            updatedAt: timestamp,
-          }
-          : currentTask,
-      ),
-    );
+      const timestamp = new Date().toISOString();
 
-    const historyEntry = {
-      id: createId(),
-      taskId: task.id,
-      taskTitle: task.title,
-      areaCode: task.areaCode,
-      completedBy: profile.fullName,
-      completedAt: timestamp,
-      note,
-    };
+      const nextDue =
+        calculateNextDue(
+          timestamp,
+          task.frequency,
+        ) ?? task.nextDue;
 
-    setAllUpkeepHistory((currentHistory) => [
-      historyEntry,
-      ...currentHistory,
-    ]);
+      setDemoUpkeepTasks((currentTasks) =>
+        currentTasks.map((currentTask) =>
+          currentTask.id === taskId
+            ? {
+              ...currentTask,
+              lastCompletedAt: timestamp,
+              nextDue,
+              updatedAt: timestamp,
+            }
+            : currentTask,
+        ),
+      );
 
-    setToast(`${task.title} marked complete.`);
+      const historyEntry = {
+        id: createId(),
+        taskId: task.id,
+        taskTitle: task.title,
+        areaCode: task.areaCode,
+        completedBy: profile.fullName,
+        completedAt: timestamp,
+        note,
+      };
+
+      setDemoUpkeepHistory((currentHistory) => [
+        historyEntry,
+        ...currentHistory,
+      ]);
+
+      setToast(`${task.title} marked complete.`);
+    } catch (error) {
+      setToast(
+        error instanceof Error
+          ? error.message
+          : "The upkeep task could not be completed.",
+      );
+    }
   };
 
   const handleUserCreate = async (formData) => {
