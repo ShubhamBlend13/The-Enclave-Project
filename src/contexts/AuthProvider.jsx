@@ -2,6 +2,7 @@ import {
     useCallback,
     useEffect,
     useMemo,
+    useRef,
     useState,
 } from "react";
 
@@ -21,8 +22,14 @@ function AuthProvider({ children }) {
     const [profileError, setProfileError] =
         useState("");
 
+    const activeUserIdRef = useRef(null);
+
     const hydrateSession = useCallback(
         async (nextSession) => {
+            const nextUserId =
+                nextSession?.user?.id ?? null;
+
+            activeUserIdRef.current = nextUserId;
             setSession(nextSession);
 
             if (!nextSession) {
@@ -83,12 +90,39 @@ function AuthProvider({ children }) {
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange(
-            (_event, nextSession) => {
+            (event, nextSession) => {
                 if (!mounted) {
                     return;
                 }
 
-                void hydrateSession(nextSession);
+                // Run Supabase/profile work after the auth callback finishes.
+                window.setTimeout(() => {
+                    if (!mounted) {
+                        return;
+                    }
+
+                    const nextUserId =
+                        nextSession?.user?.id ?? null;
+
+                    const isSameSignedInUser =
+                        Boolean(nextUserId) &&
+                        nextUserId ===
+                        activeUserIdRef.current;
+
+                    // A token refresh for the same user should update the
+                    // session silently without unmounting the application.
+                    if (
+                        isSameSignedInUser &&
+                        event !== "SIGNED_OUT"
+                    ) {
+                        setSession(nextSession);
+                        return;
+                    }
+
+                    // Reload the profile only during login, logout,
+                    // or when the authenticated user genuinely changes.
+                    void hydrateSession(nextSession);
+                }, 0);
             },
         );
 

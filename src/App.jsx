@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import AppShell from "./components/AppShell";
+import { useIssueData } from "./hooks/useIssueData";
 import DevRoleSwitcher from "./components/DevRoleSwitcher";
 import Toast from "./components/Toast";
 import CommunityPage from "./pages/CommunityPage";
@@ -88,8 +89,28 @@ function App({
     );
 
   // Issues stay in local state until Supabase replaces the demo data source.
-  const [allIssues, setAllIssues] =
+  // Demo state remains available only when App is rendered without real Auth.
+  const [demoIssues, setDemoIssues] =
     useState(DEMO_ISSUES);
+
+  const usingSupabase =
+    Boolean(authenticatedProfile);
+
+  const {
+    issues: databaseIssues,
+    loading: issuesLoading,
+    error: issuesError,
+    createIssue: createDatabaseIssue,
+    applyIssueUpdate:
+    applyDatabaseIssueUpdate,
+  } = useIssueData({
+    profile,
+    enabled: usingSupabase,
+  });
+
+  const allIssues = usingSupabase
+    ? databaseIssues
+    : demoIssues;
 
   // Announcements are local state until Supabase becomes the shared data source.
   const [allAnnouncements, setAllAnnouncements] =
@@ -174,6 +195,13 @@ function App({
     };
   }, [toast]);
 
+  useEffect(() => {
+    // Surface Supabase issue-loading errors through the existing toast UI.
+    if (issuesError) {
+      setToast(issuesError);
+    }
+  }, [issuesError]);
+
   const handleProfileChange = (profileId) => {
     if (authenticatedProfile) {
       return;
@@ -218,7 +246,6 @@ function App({
   };
 
   const handleIssueSubmit = async (formData) => {
-    // ALL is only a viewing context and must never be stored on an issue.
     const reportArea = getAreaByCode(
       formData.areaCode,
     );
@@ -230,56 +257,95 @@ function App({
       setToast(
         "Choose a valid area for this issue.",
       );
-
       return;
     }
 
-    const timestamp = new Date().toISOString();
+    try {
+      if (usingSupabase) {
+        await createDatabaseIssue(formData);
 
-    const newIssue = {
-      id: createId(),
-      areaCode: formData.areaCode,
-      category: formData.category,
-      location: formData.location,
-      description: formData.description,
-      priority: formData.priority,
-      status: ISSUE_STATUSES.OPEN,
-      reportedBy: profile.fullName,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      resolvedAt: null,
-      updates: [
-        {
-          id: createId(),
-          message: "Issue reported",
-          createdBy: profile.fullName,
-          createdAt: timestamp,
-        },
-      ],
-    };
+        handleTabChange("issues");
 
-    setAllIssues((currentIssues) => [
-      newIssue,
-      ...currentIssues,
-    ]);
+        setToast(
+          `Issue submitted for ${reportArea.name}.`,
+        );
 
-    handleTabChange("issues");
+        return;
+      }
 
-    setToast(
-      `Issue submitted for ${reportArea.name}.`,
-    );
+      const timestamp =
+        new Date().toISOString();
+
+      const newIssue = {
+        id: createId(),
+        areaCode: formData.areaCode,
+        category: formData.category,
+        location: formData.location,
+        description: formData.description,
+        priority: formData.priority,
+        status: ISSUE_STATUSES.OPEN,
+        reportedBy: profile.fullName,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        resolvedAt: null,
+        updates: [
+          {
+            id: createId(),
+            message: "Issue reported",
+            createdBy: profile.fullName,
+            createdAt: timestamp,
+          },
+        ],
+      };
+
+      setDemoIssues((currentIssues) => [
+        newIssue,
+        ...currentIssues,
+      ]);
+
+      handleTabChange("issues");
+
+      setToast(
+        `Issue submitted for ${reportArea.name}.`,
+      );
+    } catch (submitError) {
+      setToast(
+        submitError instanceof Error
+          ? submitError.message
+          : "The issue could not be submitted.",
+      );
+    }
   };
 
-  const handleIssueUpdate = (updatedIssue) => {
-    setAllIssues((currentIssues) =>
-      currentIssues.map((issue) =>
-        issue.id === updatedIssue.id
-          ? updatedIssue
-          : issue,
-      ),
-    );
+  const handleIssueUpdate = async (
+    updatedIssue,
+  ) => {
+    try {
+      if (usingSupabase) {
+        await applyDatabaseIssueUpdate(
+          updatedIssue,
+        );
 
-    setToast("Issue updated.");
+        setToast("Issue updated.");
+        return;
+      }
+
+      setDemoIssues((currentIssues) =>
+        currentIssues.map((issue) =>
+          issue.id === updatedIssue.id
+            ? updatedIssue
+            : issue,
+        ),
+      );
+
+      setToast("Issue updated.");
+    } catch (updateError) {
+      setToast(
+        updateError instanceof Error
+          ? updateError.message
+          : "The issue could not be updated.",
+      );
+    }
   };
 
   const handleAnnouncementPost = async (formData) => {
@@ -641,6 +707,18 @@ function App({
               getDefaultTab(profile),
             )
           }
+        />
+      );
+    }
+
+    if (
+      activeTab === "issues" &&
+      issuesLoading
+    ) {
+      return (
+        <PagePlaceholder
+          title="Issues"
+          areaName="Loading issues..."
         />
       );
     }
