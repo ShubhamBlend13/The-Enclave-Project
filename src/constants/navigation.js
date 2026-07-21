@@ -48,7 +48,7 @@ const UPKEEP_MANAGER_NAV_ITEMS = [
 ];
 
 export function getNavigationItems(profile) {
-    // The upkeep manager lands in the operational workflow and does not need Home.
+    // Staff land in the operational workflow and do not need Home.
     if (profile?.role === USER_ROLES.UPKEEP_MANAGER) {
         return UPKEEP_MANAGER_NAV_ITEMS;
     }

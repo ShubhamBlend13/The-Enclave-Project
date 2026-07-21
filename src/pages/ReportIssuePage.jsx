@@ -110,7 +110,7 @@ function ReportIssuePage({
           lineHeight: 1.5,
         }}
       >
-        The upkeep manager will see the issue after it is
+        Staff will see the issue after it is
         submitted.
       </p>
 

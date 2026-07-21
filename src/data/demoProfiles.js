@@ -1,4 +1,4 @@
-import { USER_ROLES } from "../constants/roles";
+import { getRoleLabel, USER_ROLES } from "../constants/roles";
 
 // These profiles exist only for local development.
 // Supabase Auth and real profile records will replace them later.
@@ -19,7 +19,7 @@ export const DEMO_PROFILES = [
   },
   {
     id: "demo-upkeep-manager",
-    label: "Upkeep Manager",
+    label: getRoleLabel(USER_ROLES.UPKEEP_MANAGER),
     fullName: "Iron Man",
     role: USER_ROLES.UPKEEP_MANAGER,
     homeAreaCode: null,

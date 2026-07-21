@@ -43,7 +43,10 @@ import {
 } from "./data/demoData";
 import { DEMO_PROFILES } from "./data/demoProfiles";
 
-import { getDefaultAreaCode } from "./utils/areaAccess";
+import {
+  getDefaultAreaCode,
+  canAccessAreaCode,
+} from "./utils/areaAccess";
 import { createId } from "./utils/id";
 
 const TAB_TITLES = {
@@ -51,7 +54,7 @@ const TAB_TITLES = {
 };
 
 function getDefaultTab(profile) {
-  // The upkeep manager starts directly with the active work queue.
+  // Staff start directly with the active work queue.
   if (profile.role === USER_ROLES.UPKEEP_MANAGER) {
     return "issues";
   }
@@ -531,10 +534,14 @@ function App({
 
     if (
       !taskArea ||
-      formData.areaCode === ALL_AREAS_CODE
+      formData.areaCode === ALL_AREAS_CODE ||
+      !canAccessAreaCode(
+        profile,
+        formData.areaCode,
+      )
     ) {
       setToast(
-        "Choose a valid area for this upkeep schedule.",
+        "Choose an upkeep area you have permission to manage.",
       );
 
       return;
@@ -644,6 +651,19 @@ function App({
 
     if (!task) {
       setToast("Upkeep task was not found.");
+      return;
+    }
+
+    if (
+      !canAccessAreaCode(
+        profile,
+        task.areaCode,
+      )
+    ) {
+      setToast(
+        "You do not have permission to complete upkeep for this area.",
+      );
+
       return;
     }
 

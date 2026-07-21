@@ -10,6 +10,7 @@ import {
   AREA_TYPES,
 } from "../constants/areas";
 import {
+  getRoleLabel,
   isOwnerAdmin,
   isVillaAdmin,
   USER_ROLES,
@@ -29,13 +30,6 @@ const INPUT_STYLE = {
   color: THEME.ink,
   fontSize: 15,
   outline: "none",
-};
-
-const ROLE_LABELS = {
-  [USER_ROLES.OWNER_ADMIN]: "Owner Admin",
-  [USER_ROLES.VILLA_ADMIN]: "Villa Admin",
-  [USER_ROLES.RESIDENT]: "Resident",
-  [USER_ROLES.UPKEEP_MANAGER]: "Upkeep Manager",
 };
 
 function AccountManagementPage({
@@ -332,7 +326,7 @@ function CreateAccountForm({
                 USER_ROLES.UPKEEP_MANAGER
               }
             >
-              Upkeep Manager
+              Staff
             </option>
           </select>
         </Field>
@@ -488,8 +482,7 @@ function UserCard({
   const [temporaryPassword, setTemporaryPassword] =
     useState("");
 
-  const roleLabel =
-    ROLE_LABELS[user.role] ?? user.role;
+  const roleLabel = getRoleLabel(user.role);
 
   const areaLabel = user.homeAreaCode
     ? `Villa ${user.homeAreaCode}`

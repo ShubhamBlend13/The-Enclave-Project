@@ -50,3 +50,20 @@ export function getDefaultAreaCode(profile) {
 export function canViewAllAreas(profile) {
   return ALL_AREA_ROLES.has(profile?.role);
 }
+
+export function canAccessAreaCode(
+  profile,
+  areaCode,
+) {
+  if (
+    !profile ||
+    !areaCode ||
+    areaCode === ALL_AREAS_CODE
+  ) {
+    return false;
+  }
+
+  return getAccessibleAreas(profile).some(
+    (area) => area.code === areaCode,
+  );
+}

@@ -9,7 +9,7 @@ export function canManageUser(actor, targetUser) {
     return false;
   }
 
-  // The owner manages villa admins and the upkeep manager.
+  // The owner manages villa admins and staff.
   if (isOwnerAdmin(actor)) {
     return [
       USER_ROLES.VILLA_ADMIN,

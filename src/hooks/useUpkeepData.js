@@ -11,6 +11,8 @@ import {
   updateUpkeepTaskRecord,
 } from "../services/upkeepService";
 
+import { canAccessAreaCode } from "../utils/areaAccess";
+
 export function useUpkeepData({
   profile,
   enabled,
@@ -67,6 +69,17 @@ export function useUpkeepData({
         );
       }
 
+      if (
+        !canAccessAreaCode(
+          profile,
+          formData.areaCode,
+        )
+      ) {
+        throw new Error(
+          "You cannot create an upkeep schedule for this area.",
+        );
+      }
+
       const createdTask =
         await createUpkeepTaskRecord({
           ...formData,
@@ -83,11 +96,21 @@ export function useUpkeepData({
 
       return createdTask;
     },
-    [profileId],
+    [profile, profileId],
   );
 
   const updateTask = useCallback(
     async (formData) => {
+      if (
+        !canAccessAreaCode(
+          profile,
+          formData.areaCode,
+        )
+      ) {
+        throw new Error(
+          "You cannot update an upkeep schedule for this area.",
+        );
+      }
       const updatedTask =
         await updateUpkeepTaskRecord(formData);
 
@@ -101,7 +124,7 @@ export function useUpkeepData({
 
       return updatedTask;
     },
-    [],
+    [profile],
   );
 
   const completeTask = useCallback(
@@ -109,7 +132,24 @@ export function useUpkeepData({
       taskId,
       note = "",
     }) => {
+      const task = tasks.find(
+        (currentTask) =>
+          currentTask.id === taskId,
+      );
+
+      if (
+        !task ||
+        !canAccessAreaCode(
+          profile,
+          task.areaCode,
+        )
+      ) {
+        throw new Error(
+          "You cannot complete an upkeep task for this area.",
+        );
+      }
       const completedTask =
+
         await completeUpkeepTaskRecord({
           taskId,
           note,
@@ -125,7 +165,7 @@ export function useUpkeepData({
 
       return completedTask;
     },
-    [],
+    [profile, tasks],
   );
 
   return {

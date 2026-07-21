@@ -155,7 +155,7 @@ function LoginPage({ onLogin }) {
                 changeIdentityType("employee")
               }
             >
-              Upkeep staff
+              Staff
             </LoginTypeButton>
           </div>
 

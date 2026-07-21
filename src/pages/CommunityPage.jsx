@@ -139,7 +139,7 @@ function CommunityPage({
               }}
             >
               {isOwnerAdmin(profile)
-                ? "Manage villa admins and the upkeep manager."
+                ? "Manage villa admins and staff."
                 : "Add residents, reset passwords and manage access."}
             </div>
           </div>

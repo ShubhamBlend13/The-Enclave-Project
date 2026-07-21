@@ -2,10 +2,7 @@ import { useState } from "react";
 
 import Btn from "../components/Btn";
 import Field from "../components/Field";
-import {
-  ALL_AREAS_CODE,
-  AREAS,
-} from "../constants/areas";
+import { ALL_AREAS_CODE } from "../constants/areas";
 import {
   getUpkeepFrequency,
   UPKEEP_FREQUENCIES,
@@ -16,6 +13,7 @@ import {
   formatDateTime,
   formatDueDate,
 } from "../utils/date";
+import { getAccessibleAreas } from "../utils/areaAccess";
 import { getEnclaveTodayDate } from "../utils/date";
 import {
   dateInputToIso,
@@ -52,6 +50,8 @@ function UpkeepPage({
     useState({});
 
   const canManage = canManageUpkeep(profile);
+  const availableAreas =
+    getAccessibleAreas(profile);
 
   const isAllAreas =
     activeArea?.code === ALL_AREAS_CODE;
@@ -141,6 +141,7 @@ function UpkeepPage({
       {canManage && showForm && (
         <UpkeepTaskForm
           activeArea={activeArea}
+          availableAreas={availableAreas}
           task={editingTask}
           onSave={async (formData) => {
             await onSaveTask(formData);
@@ -238,6 +239,7 @@ function UpkeepPage({
 
 function UpkeepTaskForm({
   activeArea,
+  availableAreas,
   task,
   onSave,
   onCancel,
@@ -271,8 +273,13 @@ function UpkeepTaskForm({
 
   const [saving, setSaving] = useState(false);
 
+  const areaIsAllowed =
+    availableAreas.some(
+      (area) => area.code === areaCode,
+    );
+
   const canSubmit =
-    Boolean(areaCode) &&
+    areaIsAllowed &&
     Boolean(title.trim()) &&
     Boolean(nextDue) &&
     !saving;
@@ -340,7 +347,7 @@ function UpkeepTaskForm({
         >
           <option value="">Select an area</option>
 
-          {AREAS.map((area) => (
+          {availableAreas.map((area) => (
             <option
               key={area.code}
               value={area.code}
