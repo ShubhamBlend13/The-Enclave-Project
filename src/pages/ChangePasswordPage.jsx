@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import Btn from "../components/Btn";
 import Field from "../components/Field";
+import PasswordInput from "../components/PasswordInput";
 import { THEME } from "../constants/theme";
 
 const INPUT_STYLE = {
@@ -119,26 +120,24 @@ function ChangePasswordPage({
 
         <form onSubmit={handleSubmit}>
           <Field label="New password">
-            <input
-              type="password"
+            <PasswordInput
               value={password}
               onChange={(event) =>
                 setPassword(event.target.value)
               }
+              placeholder="Enter a new password"
               autoComplete="new-password"
               style={INPUT_STYLE}
             />
           </Field>
 
           <Field label="Confirm new password">
-            <input
-              type="password"
+            <PasswordInput
               value={confirmation}
               onChange={(event) =>
-                setConfirmation(
-                  event.target.value,
-                )
+                setConfirmation(event.target.value)
               }
+              placeholder="Enter the password again"
               autoComplete="new-password"
               style={INPUT_STYLE}
             />

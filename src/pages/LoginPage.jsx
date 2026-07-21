@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import Btn from "../components/Btn";
 import Field from "../components/Field";
+import PasswordInput from "../components/PasswordInput";
 import { THEME } from "../constants/theme";
 
 const INPUT_STYLE = {
@@ -187,8 +188,7 @@ function LoginPage({ onLogin }) {
             </Field>
 
             <Field label="Password">
-              <input
-                type="password"
+              <PasswordInput
                 value={password}
                 onChange={(event) =>
                   setPassword(event.target.value)

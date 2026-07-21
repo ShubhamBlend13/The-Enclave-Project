@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 import Btn from "../components/Btn";
 import Chip from "../components/Chip";
 import Field from "../components/Field";
+import PasswordInput from "../components/PasswordInput";
+
 import {
   AREAS,
   AREA_TYPES,
@@ -61,9 +63,9 @@ function AccountManagementPage({
 
   const residentOverview = isOwnerAdmin(profile)
     ? visibleUsers.filter(
-        (user) =>
-          user.role === USER_ROLES.RESIDENT,
-      )
+      (user) =>
+        user.role === USER_ROLES.RESIDENT,
+    )
     : [];
 
   const title = isVillaAdmin(profile)
@@ -417,15 +419,15 @@ function CreateAccountForm({
       )}
 
       <Field label="Temporary password">
-        <input
-          type="password"
+        <PasswordInput
           value={temporaryPassword}
           onChange={(event) =>
             setTemporaryPassword(
               event.target.value,
             )
           }
-          placeholder="Minimum 8 characters"
+          placeholder="Temporary password"
+          autoComplete="new-password"
           style={INPUT_STYLE}
         />
       </Field>
@@ -605,8 +607,7 @@ function UserCard({
                 marginTop: 14,
               }}
             >
-              <input
-                type="password"
+              <PasswordInput
                 value={temporaryPassword}
                 onChange={(event) =>
                   setTemporaryPassword(
@@ -614,6 +615,7 @@ function UserCard({
                   )
                 }
                 placeholder="New temporary password"
+                autoComplete="new-password"
                 style={{
                   ...INPUT_STYLE,
                   marginBottom: 8,
